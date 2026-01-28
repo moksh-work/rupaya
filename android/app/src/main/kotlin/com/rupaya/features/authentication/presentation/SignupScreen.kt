@@ -8,6 +8,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -24,10 +25,14 @@ fun SignupScreen(
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
     var showPassword by remember { mutableStateOf(false) }
+    var usePhoneOtp by remember { mutableStateOf(false) }
+    var phoneNumber by remember { mutableStateOf("") }
+    var otp by remember { mutableStateOf("") }
 
     val isLoading by viewModel.isLoading.collectAsState()
     val isAuthenticated by viewModel.isAuthenticated.collectAsState()
     val authError by viewModel.authError.collectAsState()
+    val otpInfo by viewModel.otpInfo.collectAsState()
 
     LaunchedEffect(isAuthenticated) {
         if (isAuthenticated) {
@@ -56,7 +61,21 @@ fun SignupScreen(
 
         Spacer(modifier = Modifier.height(40.dp))
 
-        // Email Field
+        SegmentedButtonRow {
+            SegmentedButton(
+                selected = !usePhoneOtp,
+                onClick = { usePhoneOtp = false },
+                label = { Text("Email & Password") }
+            )
+            SegmentedButton(
+                selected = usePhoneOtp,
+                onClick = { usePhoneOtp = true },
+                label = { Text("Phone & OTP") }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
         OutlinedTextField(
             value = email,
             onValueChange = { email = it },
@@ -68,47 +87,73 @@ fun SignupScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Password Field
-        OutlinedTextField(
-            value = password,
-            onValueChange = { password = it },
-            label = { Text("Password (min. 12 characters)") },
-            visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
-            trailingIcon = {
-                IconButton(onClick = { showPassword = !showPassword }) {
-                    Text(if (showPassword) "Hide" else "Show")
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
-
-        // Password strength indicator
-        if (password.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(8.dp))
-            PasswordStrengthIndicator(password = password)
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Confirm Password Field
-        OutlinedTextField(
-            value = confirmPassword,
-            onValueChange = { confirmPassword = it },
-            label = { Text("Confirm Password") },
-            visualTransformation = PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            isError = confirmPassword.isNotEmpty() && password != confirmPassword
-        )
-
-        if (confirmPassword.isNotEmpty() && password != confirmPassword) {
-            Text(
-                text = "Passwords do not match",
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(top = 4.dp)
+        if (usePhoneOtp) {
+            OutlinedTextField(
+                value = phoneNumber,
+                onValueChange = { phoneNumber = it },
+                label = { Text("Phone Number") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
             )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            OutlinedTextField(
+                value = otp,
+                onValueChange = { otp = it },
+                label = { Text("OTP") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                trailingIcon = {
+                    TextButton(onClick = {
+                        viewModel.requestOtp(phoneNumber, "signup")
+                    }, enabled = phoneNumber.isNotEmpty() && !isLoading) {
+                        Text("Send OTP")
+                    }
+                }
+            )
+        } else {
+            OutlinedTextField(
+                value = password,
+                onValueChange = { password = it },
+                label = { Text("Password (min. 12 characters)") },
+                visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                trailingIcon = {
+                    IconButton(onClick = { showPassword = !showPassword }) {
+                        Text(if (showPassword) "Hide" else "Show")
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+
+            if (password.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                PasswordStrengthIndicator(password = password)
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            OutlinedTextField(
+                value = confirmPassword,
+                onValueChange = { confirmPassword = it },
+                label = { Text("Confirm Password") },
+                visualTransformation = PasswordVisualTransformation(),
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                isError = confirmPassword.isNotEmpty() && password != confirmPassword
+            )
+
+            if (confirmPassword.isNotEmpty() && password != confirmPassword) {
+                Text(
+                    text = "Passwords do not match",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
         }
 
         // Error Message
@@ -121,18 +166,33 @@ fun SignupScreen(
             )
         }
 
+        otpInfo?.let {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "OTP: $it",
+                color = MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Signup Button
         Button(
             onClick = {
                 val deviceId = "${Build.DEVICE}_${Build.FINGERPRINT.hashCode()}"
-                viewModel.signup(email, password, deviceId, Build.MODEL)
+                if (usePhoneOtp) {
+                    viewModel.signupWithPhone(email, phoneNumber, otp, deviceId, Build.MODEL)
+                } else {
+                    viewModel.signup(email, password, deviceId, Build.MODEL)
+                }
             },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(48.dp),
-            enabled = !isLoading && email.isNotEmpty() && password.isNotEmpty() && password == confirmPassword
+            enabled = !isLoading && email.isNotEmpty() && (
+                (!usePhoneOtp && password.isNotEmpty() && password == confirmPassword) ||
+                (usePhoneOtp && phoneNumber.isNotEmpty() && otp.isNotEmpty())
+            )
         ) {
             if (isLoading) {
                 CircularProgressIndicator(

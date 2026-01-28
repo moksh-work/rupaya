@@ -1,0 +1,3 @@
+# Heroku Procfile - For Heroku deployment
+web: npm start
+release: npm run migrate

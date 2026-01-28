@@ -1,0 +1,5 @@
+<resources>
+    <style name="Theme.Rupaya" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:statusBarColor">@color/purple_700</item>
+    </style>
+</resources>

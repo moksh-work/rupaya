@@ -34,6 +34,49 @@ router.post('/signup', [
   }
 });
 
+// Request OTP for phone-based auth
+router.post('/otp/request', [
+  body('phoneNumber').matches(/^[0-9+\-]{8,15}$/),
+  body('purpose').optional().isIn(['signup', 'signin'])
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { phoneNumber, purpose = 'signup' } = req.body;
+    const result = await AuthService.requestPhoneOtp(phoneNumber, purpose);
+    res.json(result);
+  } catch (error) {
+    logger.error({ error: error.message });
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Signup with phone + OTP
+router.post('/signup-phone', [
+  body('email').isEmail().normalizeEmail(),
+  body('phoneNumber').matches(/^[0-9+\-]{8,15}$/),
+  body('otp').isLength({ min: 4, max: 6 }),
+  body('deviceId').notEmpty(),
+  body('deviceName').notEmpty()
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { email, phoneNumber, otp, deviceId, deviceName, name } = req.body;
+    const result = await AuthService.signupWithPhone(email, phoneNumber, otp, deviceId, deviceName, name);
+    res.json(result);
+  } catch (error) {
+    logger.error({ error: error.message });
+    res.status(400).json({ error: error.message });
+  }
+});
+
 // Signin
 router.post('/signin', [
   body('email').isEmail().normalizeEmail(),
@@ -50,6 +93,27 @@ router.post('/signin', [
 
     const result = await AuthService.signin(email, password, deviceId);
 
+    res.json(result);
+  } catch (error) {
+    logger.error({ error: error.message });
+    res.status(401).json({ error: error.message });
+  }
+});
+
+// Signin with phone + OTP
+router.post('/signin-phone', [
+  body('phoneNumber').matches(/^[0-9+\-]{8,15}$/),
+  body('otp').isLength({ min: 4, max: 6 }),
+  body('deviceId').notEmpty()
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { phoneNumber, otp, deviceId } = req.body;
+    const result = await AuthService.signinWithPhone(phoneNumber, otp, deviceId);
     res.json(result);
   } catch (error) {
     logger.error({ error: error.message });

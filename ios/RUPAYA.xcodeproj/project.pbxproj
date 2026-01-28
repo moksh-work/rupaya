@@ -1,0 +1,410 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		06DC8BEA16C003F2672B72E2 /* AuthenticationViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89F6BB80DF7C015722C4E474 /* AuthenticationViewModel.swift */; };
+		1D4DC19EE7800A3B11D0809D /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B30235B5C32DD8D5DD2985E /* MainTabView.swift */; };
+		22E02B71F03EE639D6CCBFEA /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C56B7EA8064567DC61C104FF /* LoginView.swift */; };
+		37B79A2E3BFE43B416A66450 /* APIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = E24EED00213B6AF73F20BB65 /* APIModels.swift */; };
+		702FB5F07AB2A9DC799A0F79 /* SignupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3C0731AC2BD984FD9EF1D7F /* SignupView.swift */; };
+		773B8998F9E7B4D5B1412259 /* AuthenticationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94540F2817B7E151652A5F94 /* AuthenticationView.swift */; };
+		A60657AD7381D90F2E0F1BCD /* BiometricManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B2DAECE0E1E6E355607B314 /* BiometricManager.swift */; };
+		AD77103F6E11E48EEE738D27 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1314F947EC70C6892234A24 /* APIClient.swift */; };
+		D73915641D3AA9B526192CFC /* KeychainManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 926CD17D082A50ABD267B972 /* KeychainManager.swift */; };
+		E3725D415AC76376D8C1A045 /* RUPAYAApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B8EEC971F965EDAF5C68192 /* RUPAYAApp.swift */; };
+		E818FD10D96DCB4E3EB8395F /* APIConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1B4F561192F746DF184DF18 /* APIConfig.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		0B2DAECE0E1E6E355607B314 /* BiometricManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BiometricManager.swift; sourceTree = "<group>"; };
+		0B30235B5C32DD8D5DD2985E /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
+		197AC8D4BE6BEBA9CBA5DEBC /* RUPAYA.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = RUPAYA.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		6B8EEC971F965EDAF5C68192 /* RUPAYAApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RUPAYAApp.swift; sourceTree = "<group>"; };
+		89F6BB80DF7C015722C4E474 /* AuthenticationViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticationViewModel.swift; sourceTree = "<group>"; };
+		904BC68679D4E76CF9356602 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		926CD17D082A50ABD267B972 /* KeychainManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainManager.swift; sourceTree = "<group>"; };
+		94540F2817B7E151652A5F94 /* AuthenticationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticationView.swift; sourceTree = "<group>"; };
+		C1B4F561192F746DF184DF18 /* APIConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIConfig.swift; sourceTree = "<group>"; };
+		C56B7EA8064567DC61C104FF /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
+		D3C0731AC2BD984FD9EF1D7F /* SignupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignupView.swift; sourceTree = "<group>"; };
+		E24EED00213B6AF73F20BB65 /* APIModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIModels.swift; sourceTree = "<group>"; };
+		F1314F947EC70C6892234A24 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		017CECE8CA36D8953CB49A73 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				E24EED00213B6AF73F20BB65 /* APIModels.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		58914FA4EA6AD551774FD89A /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				89F6BB80DF7C015722C4E474 /* AuthenticationViewModel.swift */,
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		6161EF72E91ABDFC3C359DCA /* Security */ = {
+			isa = PBXGroup;
+			children = (
+				0B2DAECE0E1E6E355607B314 /* BiometricManager.swift */,
+				926CD17D082A50ABD267B972 /* KeychainManager.swift */,
+			);
+			path = Security;
+			sourceTree = "<group>";
+		};
+		7A22431386FB6A67988BCD7A /* Features */ = {
+			isa = PBXGroup;
+			children = (
+				EFAA64B47F4D475344EA7E96 /* Authentication */,
+			);
+			path = Features;
+			sourceTree = "<group>";
+		};
+		82BD0562E7D6DE64C55680B7 /* Core */ = {
+			isa = PBXGroup;
+			children = (
+				B5F280442BE8C4E729421E3B /* Networking */,
+				6161EF72E91ABDFC3C359DCA /* Security */,
+			);
+			path = Core;
+			sourceTree = "<group>";
+		};
+		914E851FF5BFE9AB854D63E8 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				0B30235B5C32DD8D5DD2985E /* MainTabView.swift */,
+				6B8EEC971F965EDAF5C68192 /* RUPAYAApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		B5F280442BE8C4E729421E3B /* Networking */ = {
+			isa = PBXGroup;
+			children = (
+				F1314F947EC70C6892234A24 /* APIClient.swift */,
+				C1B4F561192F746DF184DF18 /* APIConfig.swift */,
+			);
+			path = Networking;
+			sourceTree = "<group>";
+		};
+		C3B07215246300AD223CE20D /* RUPAYA */ = {
+			isa = PBXGroup;
+			children = (
+				904BC68679D4E76CF9356602 /* Info.plist */,
+				914E851FF5BFE9AB854D63E8 /* App */,
+				82BD0562E7D6DE64C55680B7 /* Core */,
+				7A22431386FB6A67988BCD7A /* Features */,
+				017CECE8CA36D8953CB49A73 /* Models */,
+			);
+			path = RUPAYA;
+			sourceTree = "<group>";
+		};
+		CACA5654DFBC2639FAAA6745 = {
+			isa = PBXGroup;
+			children = (
+				C3B07215246300AD223CE20D /* RUPAYA */,
+				E69A6F4D296966454318E363 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		E69A6F4D296966454318E363 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				197AC8D4BE6BEBA9CBA5DEBC /* RUPAYA.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		E74D182ADED519BB9246744C /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				94540F2817B7E151652A5F94 /* AuthenticationView.swift */,
+				C56B7EA8064567DC61C104FF /* LoginView.swift */,
+				D3C0731AC2BD984FD9EF1D7F /* SignupView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		EFAA64B47F4D475344EA7E96 /* Authentication */ = {
+			isa = PBXGroup;
+			children = (
+				58914FA4EA6AD551774FD89A /* ViewModels */,
+				E74D182ADED519BB9246744C /* Views */,
+			);
+			path = Authentication;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		8F6223315106AB19414C656E /* RUPAYA */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4D8E17232267316FE1C5C94C /* Build configuration list for PBXNativeTarget "RUPAYA" */;
+			buildPhases = (
+				3C1B4056208F2E63597D9EB6 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = RUPAYA;
+			packageProductDependencies = (
+			);
+			productName = RUPAYA;
+			productReference = 197AC8D4BE6BEBA9CBA5DEBC /* RUPAYA.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		5005E46F8A3331D4950545B9 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					8F6223315106AB19414C656E = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 4AAE9600F70D4C15604DEB1B /* Build configuration list for PBXProject "RUPAYA" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = CACA5654DFBC2639FAAA6745;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				8F6223315106AB19414C656E /* RUPAYA */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		3C1B4056208F2E63597D9EB6 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AD77103F6E11E48EEE738D27 /* APIClient.swift in Sources */,
+				E818FD10D96DCB4E3EB8395F /* APIConfig.swift in Sources */,
+				37B79A2E3BFE43B416A66450 /* APIModels.swift in Sources */,
+				773B8998F9E7B4D5B1412259 /* AuthenticationView.swift in Sources */,
+				06DC8BEA16C003F2672B72E2 /* AuthenticationViewModel.swift in Sources */,
+				A60657AD7381D90F2E0F1BCD /* BiometricManager.swift in Sources */,
+				D73915641D3AA9B526192CFC /* KeychainManager.swift in Sources */,
+				22E02B71F03EE639D6CCBFEA /* LoginView.swift in Sources */,
+				1D4DC19EE7800A3B11D0809D /* MainTabView.swift in Sources */,
+				E3725D415AC76376D8C1A045 /* RUPAYAApp.swift in Sources */,
+				702FB5F07AB2A9DC799A0F79 /* SignupView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		1713099A4347A4C5B00FEA0D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
+				INFOPLIST_FILE = RUPAYA/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.rupaya.app;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		69D9B2D536A751B44ADF458C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 1.0.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = RUPAYA;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.9;
+			};
+			name = Release;
+		};
+		B5E96BDBCDA1E97C804A8D78 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 1.0.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = RUPAYA;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.9;
+			};
+			name = Debug;
+		};
+		D96CB5BD88BCE8F669298772 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
+				INFOPLIST_FILE = RUPAYA/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.rupaya.app;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		4AAE9600F70D4C15604DEB1B /* Build configuration list for PBXProject "RUPAYA" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B5E96BDBCDA1E97C804A8D78 /* Debug */,
+				69D9B2D536A751B44ADF458C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		4D8E17232267316FE1C5C94C /* Build configuration list for PBXNativeTarget "RUPAYA" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D96CB5BD88BCE8F669298772 /* Debug */,
+				1713099A4347A4C5B00FEA0D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 5005E46F8A3331D4950545B9 /* Project object */;
+}

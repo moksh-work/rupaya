@@ -1,0 +1,22 @@
+#!/bin/sh
+# ------------------------------
+# Gradle wrapper bootstrap script for Unix-based systems
+# Generated for Gradle 8.2
+# ------------------------------
+
+DIR="$(cd "$(dirname "$0")" && pwd)"
+
+if [ -z "$JAVA_HOME" ]; then
+  JAVA_EXE=java
+else
+  JAVA_EXE="$JAVA_HOME/bin/java"
+fi
+
+WRAPPER_JAR="$DIR/gradle/wrapper/gradle-wrapper.jar"
+
+if [ ! -f "$WRAPPER_JAR" ]; then
+  echo "Error: gradle-wrapper.jar not found. Please ensure the wrapper JAR exists."
+  exit 1
+fi
+
+exec "$JAVA_EXE" -Dorg.gradle.appname="gradlew" -classpath "$WRAPPER_JAR" org.gradle.wrapper.GradleWrapperMain "$@"

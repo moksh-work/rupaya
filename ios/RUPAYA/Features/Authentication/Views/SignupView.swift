@@ -7,6 +7,9 @@ struct SignupView: View {
     @State private var password = ""
     @State private var confirmPassword = ""
     @State private var showPassword = false
+    @State private var usePhoneOtp = false
+    @State private var phoneNumber = ""
+    @State private var otp = ""
     
     var body: some View {
         VStack(spacing: 24) {
@@ -26,12 +29,16 @@ struct SignupView: View {
             
             // Form
             VStack(spacing: 16) {
-                // Email Field
+                Picker("Signup Method", selection: $usePhoneOtp) {
+                    Text("Email & Password").tag(false)
+                    Text("Phone & OTP").tag(true)
+                }
+                .pickerStyle(.segmented)
+
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Email")
                         .font(.caption)
                         .foregroundColor(.secondary)
-                    
                     TextField("your@email.com", text: $email)
                         .textInputAutocapitalization(.never)
                         .textContentType(.emailAddress)
@@ -40,48 +47,78 @@ struct SignupView: View {
                         .background(Color(.systemGray6))
                         .cornerRadius(8)
                 }
-                
-                // Password Field
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Password (min. 12 characters)")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    
-                    HStack {
-                        if showPassword {
-                            TextField("••••••••", text: $password)
-                        } else {
-                            SecureField("••••••••", text: $password)
-                        }
-                        
-                        Button(action: { showPassword.toggle() }) {
-                            Image(systemName: showPassword ? "eye.fill" : "eye.slash.fill")
-                                .foregroundColor(.secondary)
-                        }
+
+                if usePhoneOtp {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Phone Number")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        TextField("+1 555 123 4567", text: $phoneNumber)
+                            .keyboardType(.phonePad)
+                            .padding(12)
+                            .background(Color(.systemGray6))
+                            .cornerRadius(8)
                     }
-                    .padding(12)
-                    .background(Color(.systemGray6))
-                    .cornerRadius(8)
-                    
-                    // Password strength indicator
-                    PasswordStrengthView(password: password)
-                }
-                
-                // Confirm Password Field
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Confirm Password")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    
-                    SecureField("••••••••", text: $confirmPassword)
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("OTP")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Button("Send OTP") {
+                                authViewModel.requestOtp(phoneNumber: phoneNumber, purpose: "signup")
+                            }
+                            .disabled(phoneNumber.isEmpty || authViewModel.isLoading)
+                        }
+                        TextField("6-digit code", text: $otp)
+                            .keyboardType(.numberPad)
+                            .padding(12)
+                            .background(Color(.systemGray6))
+                            .cornerRadius(8)
+                    }
+                } else {
+                    // Password Field
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Password (min. 12 characters)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        HStack {
+                            if showPassword {
+                                TextField("••••••••", text: $password)
+                            } else {
+                                SecureField("••••••••", text: $password)
+                            }
+                            
+                            Button(action: { showPassword.toggle() }) {
+                                Image(systemName: showPassword ? "eye.fill" : "eye.slash.fill")
+                                    .foregroundColor(.secondary)
+                            }
+                        }
                         .padding(12)
                         .background(Color(.systemGray6))
                         .cornerRadius(8)
+                        
+                        // Password strength indicator
+                        PasswordStrengthView(password: password)
+                    }
                     
-                    if !confirmPassword.isEmpty && password != confirmPassword {
-                        Text("Passwords do not match")
+                    // Confirm Password Field
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Confirm Password")
                             .font(.caption)
-                            .foregroundColor(.red)
+                            .foregroundColor(.secondary)
+                        
+                        SecureField("••••••••", text: $confirmPassword)
+                            .padding(12)
+                            .background(Color(.systemGray6))
+                            .cornerRadius(8)
+                        
+                        if !confirmPassword.isEmpty && password != confirmPassword {
+                            Text("Passwords do not match")
+                                .font(.caption)
+                                .foregroundColor(.red)
+                        }
                     }
                 }
                 
@@ -90,11 +127,20 @@ struct SignupView: View {
                         .font(.caption)
                         .foregroundColor(.red)
                 }
+                if let otpInfo = authViewModel.otpInfo, usePhoneOtp {
+                    Text("OTP: \(otpInfo)")
+                        .font(.caption)
+                        .foregroundColor(.green)
+                }
             }
             
             // Signup Button
             Button(action: {
-                authViewModel.signupWithEmail(email: email, password: password)
+                if usePhoneOtp {
+                    authViewModel.signupWithPhone(email: email, phoneNumber: phoneNumber, otp: otp)
+                } else {
+                    authViewModel.signupWithEmail(email: email, password: password)
+                }
             }) {
                 HStack {
                     if authViewModel.isLoading {
@@ -109,7 +155,7 @@ struct SignupView: View {
                 .foregroundColor(.white)
                 .cornerRadius(8)
             }
-            .disabled(authViewModel.isLoading || email.isEmpty || password.isEmpty || password != confirmPassword)
+            .disabled(authViewModel.isLoading || email.isEmpty || (usePhoneOtp ? (phoneNumber.isEmpty || otp.isEmpty) : (password.isEmpty || password != confirmPassword)))
             
             // Login Link
             HStack {

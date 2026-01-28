@@ -1,3 +1,4 @@
+import Foundation
 import Security
 
 class KeychainManager {
@@ -6,7 +7,7 @@ class KeychainManager {
     private init() {}
     
     func save(_ value: String, forKey key: String) {
-        let data = value.data(using: .utf8)!
+        guard let data = value.data(using: .utf8) else { return }
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key,
@@ -28,10 +29,8 @@ class KeychainManager {
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
         
-        if status == errSecSuccess, let data = result as? Data {
-            return String(data: data, encoding: .utf8)
-        }
-        return nil
+        guard status == errSecSuccess, let data = result as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
     }
     
     func delete(_ key: String) {

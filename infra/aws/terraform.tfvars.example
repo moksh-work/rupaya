@@ -1,0 +1,14 @@
+region = "us-east-1"
+project_name = "rupaya"
+vpc_cidr = "10.0.0.0/16"
+az_count = 2
+container_port = 3000
+desired_count = 1
+db_instance_class = "db.t4g.micro"
+db_allocated_storage = 20
+db_engine_version = "15.5"
+db_name = "rupaya"
+db_username = "rupaya"
+redis_node_type = "cache.t4g.micro"
+image_tag = "latest"
+frontend_url = "*"

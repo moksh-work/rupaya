@@ -10,8 +10,13 @@ import androidx.navigation.compose.rememberNavController
 import com.rupaya.features.authentication.presentation.LoginScreen
 import com.rupaya.features.authentication.presentation.LoginViewModel
 import com.rupaya.features.authentication.presentation.SignupScreen
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 
-@Composable
+@androidx.compose.runtime.Composable
+@androidx.compose.material3.ExperimentalMaterial3Api
 fun RupayaNavigation() {
     val navController = rememberNavController()
     val viewModel: LoginViewModel = hiltViewModel()
@@ -62,7 +67,8 @@ fun RupayaNavigation() {
     }
 }
 
-@Composable
+@androidx.compose.runtime.Composable
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 fun DashboardScreen(onLogout: () -> Unit) {
     androidx.compose.material3.Scaffold(
         topBar = {

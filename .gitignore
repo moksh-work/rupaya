@@ -1,0 +1,76 @@
+# Monorepo gitignore
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Dependencies
+node_modules/
+vendor/
+
+# Backend
+backend/node_modules/
+backend/.env
+backend/npm-debug.log
+backend/coverage/
+backend/*.log
+
+# Android
+android/.gradle/
+android/local.properties
+android/build/
+android/app/build/
+android/.idea/
+android/captures/
+android/*.iml
+android/*.apk
+android/*.aab
+android/keystore.jks
+
+# iOS
+ios/Pods/
+ios/Podfile.lock
+ios/build/
+ios/*.xcworkspace/xcuserdata/
+ios/*.xcodeproj/xcuserdata/
+ios/*.xcodeproj/project.xcworkspace/xcuserdata/
+ios/DerivedData/
+ios/*.ipa
+ios/*.dSYM.zip
+
+# Build outputs
+dist/
+build/
+out/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# CI/CD
+.github/secrets/
+
+# Testing
+coverage/
+*.lcov
+.nyc_output/
+
+# Temporary
+tmp/
+temp/
+*.tmp

@@ -1,0 +1,175 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RUPAYA API Contract",
+  "version": "1.0.0",
+  "baseUrl": "https://api.rupaya.in/api/v1",
+  "endpoints": {
+    "auth": {
+      "signup": {
+        "method": "POST",
+        "path": "/auth/signup",
+        "request": {
+          "email": "string",
+          "password": "string",
+          "deviceId": "string",
+          "deviceName": "string"
+        },
+        "response": {
+          "userId": "uuid",
+          "accessToken": "string",
+          "refreshToken": "string",
+          "user": {
+            "id": "uuid",
+            "email": "string",
+            "name": "string",
+            "currency": "string",
+            "timezone": "string",
+            "theme": "string",
+            "language": "string"
+          }
+        }
+      },
+      "signin": {
+        "method": "POST",
+        "path": "/auth/signin",
+        "request": {
+          "email": "string",
+          "password": "string",
+          "deviceId": "string"
+        },
+        "response": {
+          "userId": "uuid",
+          "accessToken": "string",
+          "refreshToken": "string",
+          "user": "object"
+        }
+      },
+      "refresh": {
+        "method": "POST",
+        "path": "/auth/refresh",
+        "request": {
+          "refreshToken": "string"
+        },
+        "response": {
+          "accessToken": "string",
+          "refreshToken": "string"
+        }
+      }
+    },
+    "accounts": {
+      "list": {
+        "method": "GET",
+        "path": "/accounts",
+        "headers": {
+          "Authorization": "Bearer {accessToken}"
+        },
+        "response": "array<Account>"
+      },
+      "create": {
+        "method": "POST",
+        "path": "/accounts",
+        "headers": {
+          "Authorization": "Bearer {accessToken}"
+        },
+        "request": {
+          "name": "string",
+          "account_type": "enum[cash,bank,credit_card,investment,savings]",
+          "current_balance": "number",
+          "currency": "string"
+        },
+        "response": "Account"
+      }
+    },
+    "transactions": {
+      "list": {
+        "method": "GET",
+        "path": "/transactions",
+        "headers": {
+          "Authorization": "Bearer {accessToken}"
+        },
+        "queryParams": {
+          "accountId": "uuid (optional)",
+          "type": "enum[income,expense,transfer] (optional)",
+          "startDate": "date (optional)",
+          "endDate": "date (optional)",
+          "page": "number (default: 1)",
+          "limit": "number (default: 50)"
+        },
+        "response": {
+          "transactions": "array<Transaction>",
+          "pagination": {
+            "page": "number",
+            "limit": "number",
+            "total": "number"
+          }
+        }
+      },
+      "create": {
+        "method": "POST",
+        "path": "/transactions",
+        "headers": {
+          "Authorization": "Bearer {accessToken}"
+        },
+        "request": {
+          "accountId": "uuid",
+          "amount": "number",
+          "type": "enum[income,expense,transfer]",
+          "categoryId": "uuid",
+          "description": "string",
+          "date": "date"
+        },
+        "response": "Transaction"
+      }
+    },
+    "analytics": {
+      "dashboard": {
+        "method": "GET",
+        "path": "/analytics/dashboard",
+        "headers": {
+          "Authorization": "Bearer {accessToken}"
+        },
+        "queryParams": {
+          "period": "enum[week,month,year]"
+        },
+        "response": {
+          "totalIncome": "number",
+          "totalExpenses": "number",
+          "netSavings": "number",
+          "savingsRate": "number",
+          "spendingByCategory": "array<CategorySpending>"
+        }
+      }
+    }
+  },
+  "models": {
+    "Account": {
+      "account_id": "uuid",
+      "user_id": "uuid",
+      "name": "string",
+      "account_type": "string",
+      "currency": "string",
+      "current_balance": "string",
+      "is_default": "boolean",
+      "created_at": "timestamp",
+      "updated_at": "timestamp"
+    },
+    "Transaction": {
+      "transaction_id": "uuid",
+      "account_id": "uuid",
+      "category_id": "uuid",
+      "amount": "string",
+      "type": "string",
+      "description": "string",
+      "transaction_date": "timestamp",
+      "created_at": "timestamp"
+    },
+    "Category": {
+      "category_id": "uuid",
+      "name": "string",
+      "category_type": "string",
+      "icon": "string",
+      "color": "string",
+      "is_system": "boolean"
+    }
+  }
+}

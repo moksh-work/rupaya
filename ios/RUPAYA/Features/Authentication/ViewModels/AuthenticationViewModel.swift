@@ -7,6 +7,7 @@ class AuthenticationViewModel: ObservableObject {
     @Published var currentUser: User?
     @Published var authError: String?
     @Published var isLoading = false
+    @Published var otpInfo: String?
     
     private let apiClient = APIClient.shared
     private let keychainManager = KeychainManager.shared
@@ -62,6 +63,32 @@ class AuthenticationViewModel: ObservableObject {
             }
             .store(in: &cancellables)
     }
+
+    func signupWithPhone(email: String, phoneNumber: String, otp: String, name: String? = nil) {
+        isLoading = true
+        authError = nil
+        otpInfo = nil
+        let deviceID = UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString
+        let request = SignupPhoneRequest(
+            email: email,
+            phoneNumber: phoneNumber,
+            otp: otp,
+            deviceId: deviceID,
+            deviceName: UIDevice.current.name,
+            name: name
+        )
+        apiClient.request("/api/v1/auth/signup-phone", method: "POST", body: request)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] completion in
+                self?.isLoading = false
+                if case .failure(let error) = completion {
+                    self?.authError = error.localizedDescription
+                }
+            } receiveValue: { [weak self] (response: AuthenticationResponse) in
+                self?.handleAuthenticationResponse(response)
+            }
+            .store(in: &cancellables)
+    }
     
     func loginWithEmail(email: String, password: String) {
         isLoading = true
@@ -86,6 +113,43 @@ class AuthenticationViewModel: ObservableObject {
                 } else {
                     self?.handleAuthenticationResponse(response)
                 }
+            }
+            .store(in: &cancellables)
+    }
+
+    func signinWithPhone(phoneNumber: String, otp: String) {
+        isLoading = true
+        authError = nil
+        otpInfo = nil
+        let deviceID = UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString
+        let request = SigninPhoneRequest(phoneNumber: phoneNumber, otp: otp, deviceId: deviceID)
+        apiClient.request("/api/v1/auth/signin-phone", method: "POST", body: request)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] completion in
+                self?.isLoading = false
+                if case .failure(let error) = completion {
+                    self?.authError = error.localizedDescription
+                }
+            } receiveValue: { [weak self] (response: AuthenticationResponse) in
+                self?.handleAuthenticationResponse(response)
+            }
+            .store(in: &cancellables)
+    }
+
+    func requestOtp(phoneNumber: String, purpose: String) {
+        isLoading = true
+        authError = nil
+        otpInfo = nil
+        let request = PhoneOtpRequest(phoneNumber: phoneNumber, purpose: purpose)
+        apiClient.request("/api/v1/auth/otp/request", method: "POST", body: request)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] completion in
+                self?.isLoading = false
+                if case .failure(let error) = completion {
+                    self?.authError = error.localizedDescription
+                }
+            } receiveValue: { [weak self] (response: OTPResponse) in
+                self?.otpInfo = response.otp ?? "OTP sent"
             }
             .store(in: &cancellables)
     }
@@ -128,8 +192,9 @@ class AuthenticationViewModel: ObservableObject {
                 if case .failure = completion {
                     self?.logout()
                 }
-            } receiveValue: { [weak self] (response: AuthenticationResponse) in
-                self?.handleAuthenticationResponse(response)
+            } receiveValue: { [weak self] (response: RefreshTokenResponse) in
+                self?.keychainManager.save(response.accessToken, forKey: "access_token")
+                self?.keychainManager.save(response.refreshToken, forKey: "refresh_token")
             }
             .store(in: &cancellables)
     }

@@ -14,6 +14,8 @@ class User {
       email: userData.email,
       password_hash: hashedPassword,
       name: userData.name,
+      phone_number: userData.phone_number || null,
+      phone_verified: userData.phone_verified || false,
       country_code: userData.country_code || 'IN',
       currency_preference: userData.currency_preference || 'INR',
       oauth_provider: userData.oauth_provider || null,
@@ -29,6 +31,10 @@ class User {
 
   static async findByEmail(email) {
     return await db('users').where({ email }).first();
+  }
+
+  static async findByPhone(phoneNumber) {
+    return await db('users').where({ phone_number: phoneNumber }).first();
   }
 
   static async findById(userId) {
@@ -113,6 +119,12 @@ class User {
       .update(user.mfa_secret, 'hex', 'utf8');
 
     return decrypted;
+  }
+
+  static async setPhoneVerified(userId) {
+    return await db('users')
+      .where({ user_id: userId })
+      .update({ phone_verified: true, updated_at: new Date() });
   }
 }
 

@@ -12,6 +12,7 @@ import com.rupaya.ui.theme.RupayaTheme
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
+@androidx.compose.material3.ExperimentalMaterial3Api
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

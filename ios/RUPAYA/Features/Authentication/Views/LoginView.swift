@@ -6,6 +6,9 @@ struct LoginView: View {
     @State private var email = ""
     @State private var password = ""
     @State private var showPassword = false
+    @State private var usePhoneOtp = false
+    @State private var phoneNumber = ""
+    @State private var otp = ""
     
     var body: some View {
         VStack(spacing: 24) {
@@ -25,42 +28,77 @@ struct LoginView: View {
             
             // Form
             VStack(spacing: 16) {
-                // Email Field
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Email")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                Picker("Login Method", selection: $usePhoneOtp) {
+                    Text("Email & Password").tag(false)
+                    Text("Phone & OTP").tag(true)
+                }
+                .pickerStyle(.segmented)
+
+                if usePhoneOtp {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Phone Number")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        TextField("+1 555 123 4567", text: $phoneNumber)
+                            .keyboardType(.phonePad)
+                            .padding(12)
+                            .background(Color(.systemGray6))
+                            .cornerRadius(8)
+                    }
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("OTP")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Button("Send OTP") {
+                                authViewModel.requestOtp(phoneNumber: phoneNumber, purpose: "signin")
+                            }
+                            .disabled(phoneNumber.isEmpty || authViewModel.isLoading)
+                        }
+                        TextField("6-digit code", text: $otp)
+                            .keyboardType(.numberPad)
+                            .padding(12)
+                            .background(Color(.systemGray6))
+                            .cornerRadius(8)
+                    }
+                } else {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Email")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        TextField("your@email.com", text: $email)
+                            .textInputAutocapitalization(.never)
+                            .textContentType(.emailAddress)
+                            .keyboardType(.emailAddress)
+                            .padding(12)
+                            .background(Color(.systemGray6))
+                            .cornerRadius(8)
+                    }
                     
-                    TextField("your@email.com", text: $email)
-                        .textInputAutocapitalization(.never)
-                        .textContentType(.emailAddress)
-                        .keyboardType(.emailAddress)
+                    // Password Field
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Password")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        HStack {
+                            if showPassword {
+                                TextField("••••••••", text: $password)
+                            } else {
+                                SecureField("••••••••", text: $password)
+                            }
+                            
+                            Button(action: { showPassword.toggle() }) {
+                                Image(systemName: showPassword ? "eye.fill" : "eye.slash.fill")
+                                    .foregroundColor(.secondary)
+                            }
+                        }
                         .padding(12)
                         .background(Color(.systemGray6))
                         .cornerRadius(8)
-                }
-                
-                // Password Field
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Password")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    
-                    HStack {
-                        if showPassword {
-                            TextField("••••••••", text: $password)
-                        } else {
-                            SecureField("••••••••", text: $password)
-                        }
-                        
-                        Button(action: { showPassword.toggle() }) {
-                            Image(systemName: showPassword ? "eye.fill" : "eye.slash.fill")
-                                .foregroundColor(.secondary)
-                        }
                     }
-                    .padding(12)
-                    .background(Color(.systemGray6))
-                    .cornerRadius(8)
                 }
                 
                 if let error = authViewModel.authError {
@@ -68,11 +106,20 @@ struct LoginView: View {
                         .font(.caption)
                         .foregroundColor(.red)
                 }
+                if let otpInfo = authViewModel.otpInfo, usePhoneOtp {
+                    Text("OTP: \(otpInfo)")
+                        .font(.caption)
+                        .foregroundColor(.green)
+                }
             }
             
             // Login Button
             Button(action: {
-                authViewModel.loginWithEmail(email: email, password: password)
+                if usePhoneOtp {
+                    authViewModel.signinWithPhone(phoneNumber: phoneNumber, otp: otp)
+                } else {
+                    authViewModel.loginWithEmail(email: email, password: password)
+                }
             }) {
                 HStack {
                     if authViewModel.isLoading {
@@ -87,7 +134,7 @@ struct LoginView: View {
                 .foregroundColor(.white)
                 .cornerRadius(8)
             }
-            .disabled(authViewModel.isLoading || email.isEmpty || password.isEmpty)
+            .disabled(authViewModel.isLoading || (!usePhoneOtp && (email.isEmpty || password.isEmpty)) || (usePhoneOtp && (phoneNumber.isEmpty || otp.isEmpty)))
             
             // Forgot Password
             Button(action: {}) {

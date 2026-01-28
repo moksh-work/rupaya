@@ -1,0 +1,28 @@
+{
+  "name": "rupaya-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "RUPAYA Money Manager - Monorepo",
+  "workspaces": [
+    "backend"
+  ],
+  "scripts": {
+    "start:backend": "./scripts/manage.sh start backend",
+    "stop:backend": "./scripts/manage.sh stop backend",
+    "test:backend": "./scripts/manage.sh test backend",
+    "build:android": "./scripts/manage.sh build android",
+    "build:ios": "./scripts/manage.sh build ios",
+    "build:all": "./scripts/manage.sh build all",
+    "status": "./scripts/manage.sh status",
+    "clean": "./scripts/manage.sh clean",
+    "setup": "npm run setup:backend && npm run setup:ios",
+    "setup:backend": "cd backend && npm install",
+    "setup:ios": "cd ios && export PATH=/opt/homebrew/opt/ruby/bin:/opt/homebrew/lib/ruby/gems/4.0.0/bin:$PATH && pod install"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/moksh-work/rupaya.git"
+  },
+  "author": "RUPAYA Team",
+  "license": "UNLICENSED"
+}

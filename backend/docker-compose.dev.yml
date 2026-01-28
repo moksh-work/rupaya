@@ -1,0 +1,88 @@
+# Development Docker Compose - Local testing with hot reload
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: rupaya-postgres-dev
+    environment:
+      POSTGRES_USER: rupaya
+      POSTGRES_PASSWORD: secure_password_here
+      POSTGRES_DB: rupaya_dev
+      POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale=en_US.UTF-8
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data_dev:/var/lib/postgresql/data
+      - ./migrations/001_init.sql:/docker-entrypoint-initdb.d/001_init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rupaya"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - rupaya-dev
+
+  redis:
+    image: redis:7-alpine
+    container_name: rupaya-redis-dev
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data_dev:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - rupaya-dev
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: rupaya-backend-dev
+    ports:
+      - "3000:3000"
+      - "9229:9229"  # Debug port
+    environment:
+      NODE_ENV: development
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: rupaya
+      DB_PASSWORD: secure_password_here
+      DB_NAME: rupaya_dev
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:-your_jwt_secret_key_here_min_32_chars_long_dev}
+      REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET:-your_refresh_token_secret_min_32_chars_long_dev}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-your_encryption_key_min_32_chars_long_dev}
+      LOG_LEVEL: debug
+      DEBUG: "rupaya:*"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - /app/node_modules
+    networks:
+      - rupaya-dev
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  postgres_data_dev:
+    driver: local
+  redis_data_dev:
+    driver: local
+
+networks:
+  rupaya-dev:
+    driver: bridge

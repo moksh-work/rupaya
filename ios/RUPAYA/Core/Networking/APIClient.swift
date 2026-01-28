@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import UIKit
 
 class APIClient: NSObject, URLSessionDelegate {
     static let shared = APIClient()
@@ -22,11 +23,20 @@ class APIClient: NSObject, URLSessionDelegate {
         )
     }()
     
-    private let baseURL = "https://api.rupaya.in"
+    private var baseURL: String {
+        return APIConfig.resolvedBaseURL
+    }
     private let keychainManager = KeychainManager.shared
     
     func request<T: Decodable>(_ endpoint: String, method: String = "GET", body: Encodable? = nil) -> AnyPublisher<T, Error> {
-        guard var urlComponents = URLComponents(string: "\(baseURL)\(endpoint)") else {
+        let fullURL = "\(baseURL)\(endpoint)"
+        
+        #if DEBUG
+        APIConfig.log("[\(method)] \(fullURL)", type: .network)
+        #endif
+        
+        guard let urlComponents = URLComponents(string: fullURL) else {
+            APIConfig.log("Invalid URL: \(fullURL)", type: .error)
             return Fail(error: URLError(.badURL)).eraseToAnyPublisher()
         }
         
@@ -48,15 +58,36 @@ class APIClient: NSObject, URLSessionDelegate {
         // Encode body
         if let body = body {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.httpBody = try? JSONEncoder().encode(body)
+            do {
+                request.httpBody = try JSONEncoder().encode(body)
+                if let bodyString = String(data: request.httpBody ?? Data(), encoding: .utf8) {
+                    APIConfig.log("Request body: \(bodyString)", type: .network)
+                }
+            } catch {
+                APIConfig.log("Failed to encode body: \(error)", type: .error)
+                return Fail(error: error).eraseToAnyPublisher()
+            }
         }
         
         return session.dataTaskPublisher(for: request)
-            .mapError { $0 as Error }
+            .mapError { error -> Error in
+                #if DEBUG
+                APIConfig.log("Network Error: \(error.localizedDescription) (code: \(error._code))", type: .error)
+                #endif
+                return error as Error
+            }
             .flatMap { data, response -> AnyPublisher<T, Error> in
                 guard let httpResponse = response as? HTTPURLResponse else {
-                    return Fail(error: URLError(.badServerResponse)).eraseToAnyPublisher()
+                    APIConfig.log("Invalid server response", type: .error)
+                    return Fail(error: APIError.badServerResponse(statusCode: 0, message: "Invalid server response")).eraseToAnyPublisher()
                 }
+                
+                #if DEBUG
+                APIConfig.log("Response [\(httpResponse.statusCode)]: \(endpoint)", type: .network)
+                if let responseString = String(data: data, encoding: .utf8) {
+                    APIConfig.log("Response body: \(responseString)", type: .network)
+                }
+                #endif
                 
                 // Handle 401 - refresh token and retry
                 if httpResponse.statusCode == 401 {
@@ -64,12 +95,24 @@ class APIClient: NSObject, URLSessionDelegate {
                 }
                 
                 if !(200...299).contains(httpResponse.statusCode) {
-                    return Fail(error: URLError(.badServerResponse)).eraseToAnyPublisher()
+                    // Try to extract error message from response
+                    if let errorResponse = try? JSONDecoder().decode([String: String].self, from: data),
+                       let errorMsg = errorResponse["error"] {
+                        APIConfig.log("Server error [\(httpResponse.statusCode)]: \(errorMsg)", type: .error)
+                        return Fail(error: APIError.badServerResponse(statusCode: httpResponse.statusCode, message: errorMsg)).eraseToAnyPublisher()
+                    } else {
+                        let errorMsg = HTTPURLResponse.localizedString(forStatusCode: httpResponse.statusCode)
+                        APIConfig.log("Server error: \(httpResponse.statusCode) - \(errorMsg)", type: .error)
+                        return Fail(error: APIError.badServerResponse(statusCode: httpResponse.statusCode, message: errorMsg)).eraseToAnyPublisher()
+                    }
                 }
                 
                 return Just(data)
                     .decode(type: T.self, decoder: JSONDecoder())
-                    .mapError { $0 as Error }
+                    .mapError { decodeError -> Error in
+                        APIConfig.log("Decode error: \(decodeError)", type: .error)
+                        return APIError.decodingError(decodeError.localizedDescription)
+                    }
                     .eraseToAnyPublisher()
             }
             .eraseToAnyPublisher()
@@ -82,18 +125,18 @@ class APIClient: NSObject, URLSessionDelegate {
         
         let refreshRequest = RefreshTokenRequest(refreshToken: refreshToken)
         
-        return request("/auth/refresh", method: "POST", body: refreshRequest)
+        return request("/api/v1/auth/refresh", method: "POST", body: refreshRequest)
             .handleEvents(
+                receiveOutput: { (response: RefreshTokenResponse) in
+                    self.keychainManager.save(response.accessToken, forKey: "access_token")
+                    self.keychainManager.save(response.refreshToken, forKey: "refresh_token")
+                },
                 receiveCompletion: { completion in
                     if case .failure = completion {
                         // Clear tokens and redirect to login
                         self.keychainManager.delete("access_token")
                         self.keychainManager.delete("refresh_token")
                     }
-                },
-                receiveOutput: { (response: AuthenticationResponse) in
-                    self.keychainManager.save(response.accessToken, forKey: "access_token")
-                    self.keychainManager.save(response.refreshToken, forKey: "refresh_token")
                 }
             )
             .flatMap { _ in

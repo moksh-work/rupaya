@@ -3,7 +3,9 @@ const jwt = require('jsonwebtoken');
 const speakeasy = require('speakeasy');
 const QRCode = require('qrcode');
 const { v4: uuidv4 } = require('uuid');
-const pwned = require('havebeenpwned');
+const { pwnedPassword } = require('hibp');
+const db = require('../config/database');
+const bcrypt = require('bcryptjs');
 
 class AuthService {
   static generateAccessToken(userId, deviceId) {
@@ -39,9 +41,14 @@ class AuthService {
     }
 
     // Check if password has been pwned
-    const isPwned = await pwned.check(password);
-    if (isPwned) {
-      throw new Error('This password has been breached. Please use a different password.');
+    try {
+      const pwnedCount = await pwnedPassword(password);
+      if (pwnedCount > 0) {
+        throw new Error('This password has been breached. Please use a different password.');
+      }
+    } catch (err) {
+      // If hibp service is down, allow signup to proceed
+      console.warn('Could not check password breach status:', err.message);
     }
 
     // Check if user already exists
@@ -106,6 +113,128 @@ class AuthService {
       user: this.formatUserResponse(user),
       mfaRequired: user.mfa_enabled
     };
+  }
+
+  static async requestPhoneOtp(phoneNumber, purpose = 'signup') {
+    const normalized = phoneNumber.replace(/\D/g, '');
+    if (normalized.length < 8 || normalized.length > 15) {
+      throw new Error('Invalid phone number');
+    }
+
+    const existingUser = await User.findByPhone(normalized);
+    if (purpose === 'signup' && existingUser) {
+      throw new Error('Phone already registered');
+    }
+    if (purpose === 'signin' && !existingUser) {
+      throw new Error('Account not found');
+    }
+
+    // Generate 6-digit OTP
+    const otp = (Math.floor(100000 + Math.random() * 900000)).toString();
+    const codeHash = await bcrypt.hash(otp, 10);
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    // Clear previous OTPs for this phone/purpose
+    await db('phone_otps').where({ phone_number: normalized, purpose }).del();
+    await db('phone_otps').insert({
+      phone_number: normalized,
+      code_hash: codeHash,
+      purpose,
+      expires_at: expiresAt
+    });
+
+    return {
+      message: 'OTP sent',
+      // In a real system, send via SMS. For development, return code for testing.
+      otp
+    };
+  }
+
+  static async signupWithPhone(email, phoneNumber, otp, deviceId, deviceName, name) {
+    const normalized = phoneNumber.replace(/\D/g, '');
+    // Verify OTP first
+    await this.verifyPhoneOtp(normalized, otp, 'signup');
+
+    // Check email/phone not already used
+    const existingEmail = await User.findByEmail(email);
+    if (existingEmail) {
+      throw new Error('User already exists');
+    }
+    const existingPhone = await User.findByPhone(normalized);
+    if (existingPhone) {
+      throw new Error('Phone already registered');
+    }
+
+    const user = await User.create({
+      email,
+      phone_number: normalized,
+      phone_verified: true,
+      password: null,
+      name: name || email.split('@')[0]
+    });
+
+    const accessToken = this.generateAccessToken(user.user_id, deviceId);
+    const refreshToken = this.generateRefreshToken(user.user_id, deviceId);
+
+    await this.storeDevice(user.user_id, deviceId, deviceName, 'phone_otp');
+
+    return {
+      userId: user.user_id,
+      accessToken,
+      refreshToken,
+      user: this.formatUserResponse(user)
+    };
+  }
+
+  static async signinWithPhone(phoneNumber, otp, deviceId) {
+    const normalized = phoneNumber.replace(/\D/g, '');
+    const user = await User.findByPhone(normalized);
+    if (!user) {
+      throw new Error('Account not found');
+    }
+
+    await this.verifyPhoneOtp(normalized, otp, 'signin');
+    await User.setPhoneVerified(user.user_id);
+    await User.updateLastLogin(user.user_id, deviceId);
+
+    const accessToken = this.generateAccessToken(user.user_id, deviceId);
+    const refreshToken = this.generateRefreshToken(user.user_id, deviceId);
+
+    return {
+      userId: user.user_id,
+      accessToken,
+      refreshToken,
+      user: this.formatUserResponse(user),
+      mfaRequired: user.mfa_enabled
+    };
+  }
+
+  static async verifyPhoneOtp(phoneNumber, otp, purpose) {
+    const record = await db('phone_otps')
+      .where({ phone_number: phoneNumber.replace(/\D/g, ''), purpose })
+      .andWhere('expires_at', '>', new Date())
+      .orderBy('created_at', 'desc')
+      .first();
+
+    if (!record) {
+      throw new Error('OTP expired or not found');
+    }
+
+    if (record.attempt_count >= 5) {
+      throw new Error('Too many attempts. Request a new OTP.');
+    }
+
+    const isValid = await bcrypt.compare(otp, record.code_hash);
+    if (!isValid) {
+      await db('phone_otps')
+        .where({ otp_id: record.otp_id })
+        .update({ attempt_count: record.attempt_count + 1 });
+      throw new Error('Invalid OTP');
+    }
+
+    // Cleanup after successful verification
+    await db('phone_otps').where({ phone_number: phoneNumber.replace(/\D/g, ''), purpose }).del();
+    return true;
   }
 
   static async verifyToken(token) {
@@ -177,6 +306,23 @@ class AuthService {
   static async storeDevice(userId, deviceId, deviceName, source) {
     const db = require('../config/database');
     
+    // Check if device already exists
+    const existingDevice = await db('devices')
+      .where({ device_fingerprint: deviceId, user_id: userId })
+      .first();
+    
+    if (existingDevice) {
+      // Update existing device
+      return await db('devices')
+        .where({ device_fingerprint: deviceId, user_id: userId })
+        .update({
+          device_name: deviceName,
+          is_active: true,
+          created_at: new Date()
+        });
+    }
+    
+    // Insert new device
     return await db('devices').insert({
       device_id: uuidv4(),
       user_id: userId,
@@ -212,11 +358,13 @@ class AuthService {
     return {
       id: user.user_id,
       email: user.email,
+      phoneNumber: user.phone_number || null,
+      phoneVerified: user.phone_verified || false,
       name: user.name,
-      currency: user.currency_preference,
-      timezone: user.timezone,
-      theme: user.theme_preference,
-      language: user.language_preference
+      currency: user.currency_preference || 'INR',
+      timezone: user.timezone || 'UTC',
+      theme: user.theme_preference || 'light',
+      language: user.language_preference || 'en'
     };
   }
 }

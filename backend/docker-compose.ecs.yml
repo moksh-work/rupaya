@@ -1,0 +1,41 @@
+# AWS ECS Compatible Docker Compose
+version: '3.8'
+
+services:
+  backend:
+    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/rupaya-backend:latest
+    restart: always
+    portMappings:
+      - containerPort: 3000
+        hostPort: 3000
+        protocol: tcp
+    environment:
+      NODE_ENV: production
+      DB_HOST: ${RDS_ENDPOINT}
+      DB_PORT: 5432
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      REDIS_URL: ${ELASTICACHE_ENDPOINT}
+      JWT_SECRET: ${JWT_SECRET}
+      REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      LOG_LEVEL: info
+      AWS_REGION: ${AWS_REGION}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET}
+    logConfiguration:
+      logDriver: awslogs
+      options:
+        awslogs-group: /ecs/rupaya-backend
+        awslogs-region: ${AWS_REGION}
+        awslogs-stream-prefix: ecs
+    healthCheck:
+      command:
+        - CMD-SHELL
+        - "curl -f http://localhost:3000/health || exit 1"
+      interval: 30
+      timeout: 5
+      retries: 3
+      startPeriod: 10

@@ -12,6 +12,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.ui.platform.testTag
 
 @Composable
 fun LoginScreen(
@@ -22,10 +23,14 @@ fun LoginScreen(
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var showPassword by remember { mutableStateOf(false) }
+    var usePhoneOtp by remember { mutableStateOf(false) }
+    var phoneNumber by remember { mutableStateOf("") }
+    var otp by remember { mutableStateOf("") }
 
     val isLoading by viewModel.isLoading.collectAsState()
     val isAuthenticated by viewModel.isAuthenticated.collectAsState()
     val authError by viewModel.authError.collectAsState()
+    val otpInfo by viewModel.otpInfo.collectAsState()
 
     LaunchedEffect(isAuthenticated) {
         if (isAuthenticated) {
@@ -54,32 +59,75 @@ fun LoginScreen(
 
         Spacer(modifier = Modifier.height(40.dp))
 
-        // Email Field
-        OutlinedTextField(
-            value = email,
-            onValueChange = { email = it },
-            label = { Text("Email") },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
+        // Mode toggle
+        SegmentedButtonRow {
+            SegmentedButton(
+                selected = !usePhoneOtp,
+                onClick = { usePhoneOtp = false },
+                label = { Text("Email & Password") }
+            )
+            SegmentedButton(
+                selected = usePhoneOtp,
+                onClick = { usePhoneOtp = true },
+                label = { Text("Phone & OTP") }
+            )
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Password Field
-        OutlinedTextField(
-            value = password,
-            onValueChange = { password = it },
-            label = { Text("Password") },
-            visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
-            trailingIcon = {
-                IconButton(onClick = { showPassword = !showPassword }) {
-                    Text(if (showPassword) "Hide" else "Show")
+        if (usePhoneOtp) {
+            OutlinedTextField(
+                value = phoneNumber,
+                onValueChange = { phoneNumber = it },
+                label = { Text("Phone Number") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            OutlinedTextField(
+                value = otp,
+                onValueChange = { otp = it },
+                label = { Text("OTP") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                trailingIcon = {
+                    TextButton(onClick = {
+                        viewModel.requestOtp(phoneNumber, "signin")
+                    }, enabled = phoneNumber.isNotEmpty() && !isLoading) {
+                        Text("Send OTP")
+                    }
                 }
-            },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
+            )
+        } else {
+            OutlinedTextField(
+                value = email,
+                onValueChange = { email = it },
+                label = { Text("Email") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            OutlinedTextField(
+                value = password,
+                onValueChange = { password = it },
+                label = { Text("Password") },
+                visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                trailingIcon = {
+                    IconButton(onClick = { showPassword = !showPassword }) {
+                        Text(if (showPassword) "Hide" else "Show")
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+        }
 
         // Error Message
         authError?.let {
@@ -87,22 +135,38 @@ fun LoginScreen(
             Text(
                 text = it,
                 color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.testTag("login_error_message")
+            )
+        }
+
+        otpInfo?.let {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "OTP: $it",
+                color = MaterialTheme.colorScheme.primary,
                 style = MaterialTheme.typography.bodySmall
             )
         }
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Login Button
         Button(
             onClick = {
                 val deviceId = "${Build.DEVICE}_${Build.FINGERPRINT.hashCode()}"
-                viewModel.login(email, password, deviceId)
+                if (usePhoneOtp) {
+                    viewModel.loginWithPhone(phoneNumber, otp, deviceId)
+                } else {
+                    viewModel.login(email, password, deviceId)
+                }
             },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(48.dp),
-            enabled = !isLoading && email.isNotEmpty() && password.isNotEmpty()
+            enabled = !isLoading && (
+                (!usePhoneOtp && email.isNotEmpty() && password.isNotEmpty()) ||
+                (usePhoneOtp && phoneNumber.isNotEmpty() && otp.isNotEmpty())
+            )
         ) {
             if (isLoading) {
                 CircularProgressIndicator(

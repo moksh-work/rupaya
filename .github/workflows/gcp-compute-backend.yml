@@ -1,0 +1,51 @@
+name: Build and Deploy Backend to GCP Compute Engine
+
+# This workflow builds, tests, and deploys the backend Docker image to a GCP Compute Engine instance group using industry best practices.
+
+on:
+  workflow_run:
+    workflows: ["Build and Deploy Backend to GCP Cloud Run"]
+    types:
+      - completed
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+      ZONE: us-central1-a # Change as needed
+      INSTANCE_GROUP: rupaya-backend-group
+      IMAGE: gcr.io/${{ secrets.GCP_PROJECT_ID }}/rupaya-backend:${{ github.sha }}
+      INSTANCE_NAME: ${{ secrets.GCP_INSTANCE_NAME }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: Authenticate to Google Cloud (OIDC)
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
+
+      - name: Deploy to Compute Engine via SSH
+        run: |
+          gcloud compute ssh $INSTANCE_NAME --zone $ZONE --command="sudo docker pull $IMAGE && sudo docker stop rupaya-backend || true && sudo docker rm rupaya-backend || true && sudo docker run -d --name rupaya-backend -p 80:3000 $IMAGE"
+
+      - name: Notify
+        run: echo "Deployed to Compute Engine: $INSTANCE_NAME"
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "Compute Engine deployment failed. Please check the logs."

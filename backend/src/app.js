@@ -72,9 +72,12 @@ app.use((req, res) => {
 // Error Handler
 app.use(errorHandler);
 
+
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  logger.info(`RUPAYA Backend running on port ${PORT}`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    logger.info(`RUPAYA Backend running on port ${PORT}`);
+  });
+}
 
 module.exports = app;

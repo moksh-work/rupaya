@@ -1,0 +1,42 @@
+namespace: rupaya
+
+image:
+  repository: rupaya-backend
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 3000
+
+ingress:
+  enabled: false
+  className: nginx
+  hosts:
+    - host: rupaya.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  limits:
+    cpu: 250m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 256Mi
+
+replicaCount: 1
+
+env:
+  NODE_ENV: production
+  FRONTEND_URL: "*"
+  DB_HOST: "postgres"
+  DB_NAME: "rupaya"
+  DB_USER: "rupaya"
+  REDIS_URL: "redis://redis:6379"
+  PORT: "3000"
+
+secrets:
+  dbPassword: "" # if set, chart will create a Secret and inject as DB_PASSWORD
