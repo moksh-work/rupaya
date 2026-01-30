@@ -10,6 +10,15 @@ Thumbs.db
 *.swp
 *.swo
 *~
+android/gradle-*.zip
+android/java_pid*.hprof
+
+# Ignore assets and large files
+*.hprof
+*.zip
+*.tar.gz
+*.bak
+assets/
 
 # Dependencies
 node_modules/
@@ -26,6 +35,8 @@ backend/*.log
 android/.gradle/
 android/local.properties
 android/build/
+
+# Money-manager submodule (if not needed)
 android/app/build/
 android/.idea/
 android/captures/
