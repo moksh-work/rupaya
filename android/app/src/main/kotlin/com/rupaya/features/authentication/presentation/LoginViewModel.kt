@@ -39,6 +39,10 @@ class LoginViewModel @Inject constructor(
         checkAuthenticationStatus()
     }
 
+    fun clearAuthError() {
+        _authError.value = null
+    }
+
     fun login(email: String, password: String, deviceId: String) {
         viewModelScope.launch {
             try {

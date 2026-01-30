@@ -27,31 +27,33 @@ fun RupayaNavigation() {
         startDestination = if (isAuthenticated) "dashboard" else "login"
     ) {
         composable("login") {
-            LoginScreen(
-                viewModel = viewModel,
-                onLoginSuccess = {
-                    navController.navigate("dashboard") {
-                        popUpTo("login") { inclusive = true }
+                LoginScreen(
+                    viewModel = viewModel,
+                    onLoginSuccess = {
+                        navController.navigate("dashboard") {
+                            popUpTo("login") { inclusive = true }
+                        }
+                    },
+                    onNavigateToSignup = {
+                        viewModel.clearAuthError()
+                        navController.navigate("signup")
                     }
-                },
-                onNavigateToSignup = {
-                    navController.navigate("signup")
-                }
-            )
+                )
         }
 
         composable("signup") {
-            SignupScreen(
-                viewModel = viewModel,
-                onSignupSuccess = {
-                    navController.navigate("dashboard") {
-                        popUpTo("signup") { inclusive = true }
+                SignupScreen(
+                    viewModel = viewModel,
+                    onSignupSuccess = {
+                        navController.navigate("dashboard") {
+                            popUpTo("signup") { inclusive = true }
+                        }
+                    },
+                    onNavigateToLogin = {
+                        viewModel.clearAuthError()
+                        navController.popBackStack()
                     }
-                },
-                onNavigateToLogin = {
-                    navController.popBackStack()
-                }
-            )
+                )
         }
 
         composable("dashboard") {
