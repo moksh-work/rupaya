@@ -1,0 +1,52 @@
+# CODEOWNERS - Defines code ownership and review requirements
+# More info: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Global owners - notified on all changes
+* @moksh-work
+
+# Backend code
+backend/ @moksh-work
+backend/src/services/ @moksh-work @moksh-work
+backend/migrations/ @moksh-work
+
+# Frontend code (iOS/Android)
+ios/ @moksh-work
+android/ @moksh-work
+
+# Infrastructure & DevOps
+infra/ @moksh-work
+infra/aws/ @moksh-work @moksh-work
+infra/gcp/ @moksh-work @moksh-work
+infra/bootstrap/ @moksh-work @moksh-work
+
+# CI/CD Workflows
+.github/workflows/ @moksh-work
+.github/workflows/01-aws-*.yml @moksh-work @moksh-work
+.github/workflows/01-gcp-*.yml @moksh-work @moksh-work
+
+# Documentation
+docs/ @moksh-work
+*.md @moksh-work
+README.md @moksh-work @moksh-work
+
+# Security-sensitive files
+**/security/ @your-org/security-team
+*.tf @your-org/security-team @your-org/devops-team
+*.tfvars @your-org/security-team
+docker-compose*.yml @your-org/devops-team @your-org/security-team
+Dockerfile* @your-org/devops-team
+
+# Database schemas and migrations
+**/migrations/ @your-org/database-team @your-org/backend-team
+**/schema/ @your-org/database-team
+
+# Configuration files
+**/config/ @your-org/devops-team
+*.env.example @your-org/devops-team
+
+# Package management
+package.json @your-org/backend-team @your-org/devops-team
+package-lock.json @your-org/backend-team
+Podfile @your-org/ios-team
+Podfile.lock @your-org/ios-team
+build.gradle* @your-org/android-team
