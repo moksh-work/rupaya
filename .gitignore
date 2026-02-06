@@ -72,6 +72,10 @@ yarn-error.log*
 .env
 .env.local
 .env.*.local
+.env.*
+!.env.example
+!backend/.env.example
+!backend/.env.docker
 
 # CI/CD
 .github/secrets/
@@ -91,5 +95,7 @@ temp/
 **/*.tfstate
 **/*.tfstate.*
 **/terraform.tfvars
+**/*.tfvars
+**/*.tfvars.json
 **/tfplan
 **/tfplan-*
