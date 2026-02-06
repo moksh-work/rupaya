@@ -42,6 +42,22 @@ npm run dev
 
 ### Production Deployment (AWS)
 
+## Branching & Release Strategy (Enterprise Standard)
+
+We follow a hybrid GitFlow + trunk-based model used by large companies:
+
+- **main** → production deployments
+- **develop** → staging/pre-production
+- **release/\*** → stabilization before production
+- **hotfix/\*** → urgent production fixes
+- **feature/\***, **bugfix/\***, **chore/\*** → short-lived work branches
+
+### Recommended Branch Protections
+
+- **main**: require PR, 2 approvals, all CI checks green
+- **develop**: require PR, 1 approval, all CI checks green
+- **release/\*** & **hotfix/\***: require PR, CI green, mandatory review
+
 #### 1. Database Setup (RDS Aurora PostgreSQL)
 
 ```bash

@@ -57,42 +57,13 @@ fun RupayaNavigation() {
         }
 
         composable("dashboard") {
-            DashboardScreen(
+            MainTabNavigation(
                 onLogout = {
                     viewModel.logout()
                     navController.navigate("login") {
                         popUpTo("dashboard") { inclusive = true }
                     }
                 }
-            )
-        }
-    }
-}
-
-@androidx.compose.runtime.Composable
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
-fun DashboardScreen(onLogout: () -> Unit) {
-    androidx.compose.material3.Scaffold(
-        topBar = {
-            androidx.compose.material3.TopAppBar(
-                title = { androidx.compose.material3.Text("RUPAYA Dashboard") },
-                actions = {
-                    androidx.compose.material3.TextButton(onClick = onLogout) {
-                        androidx.compose.material3.Text("Logout")
-                    }
-                }
-            )
-        }
-    ) { padding ->
-        androidx.compose.foundation.layout.Box(
-            modifier = androidx.compose.ui.Modifier
-                .fillMaxSize()
-                .padding(padding),
-            contentAlignment = androidx.compose.ui.Alignment.Center
-        ) {
-            androidx.compose.material3.Text(
-                text = "Welcome to RUPAYA!",
-                style = androidx.compose.material3.MaterialTheme.typography.headlineMedium
             )
         }
     }

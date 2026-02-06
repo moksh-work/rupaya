@@ -30,9 +30,14 @@ resource "aws_iam_role_policy" "ecs_secrets_access" {
     Version = "2012-10-17",
     Statement = [
       {
-        Effect   = "Allow",
-        Action   = ["secretsmanager:GetSecretValue"],
-        Resource = [aws_secretsmanager_secret.db_password.arn]
+        Effect = "Allow",
+        Action = ["secretsmanager:GetSecretValue"],
+        Resource = [
+          aws_secretsmanager_secret.db_password.arn,
+          aws_secretsmanager_secret.jwt_secret.arn,
+          aws_secretsmanager_secret.refresh_token_secret.arn,
+          aws_secretsmanager_secret.encryption_key.arn
+        ]
       }
     ]
   })
@@ -57,11 +62,15 @@ locals {
         { name = "DB_HOST", value = aws_db_instance.postgres.address },
         { name = "DB_NAME", value = var.db_name },
         { name = "DB_USER", value = var.db_username },
+        { name = "DB_SSL", value = "true" },
         { name = "FRONTEND_URL", value = var.frontend_url },
         { name = "REDIS_URL", value = "redis://${aws_elasticache_replication_group.redis.primary_endpoint_address}:6379" }
       ]
       secrets = [
-        { name = "DB_PASSWORD", valueFrom = aws_secretsmanager_secret_version.db_password.arn }
+        { name = "DB_PASSWORD", valueFrom = aws_secretsmanager_secret_version.db_password.arn },
+        { name = "JWT_SECRET", valueFrom = aws_secretsmanager_secret_version.jwt_secret.arn },
+        { name = "REFRESH_TOKEN_SECRET", valueFrom = aws_secretsmanager_secret_version.refresh_token_secret.arn },
+        { name = "ENCRYPTION_KEY", valueFrom = aws_secretsmanager_secret_version.encryption_key.arn }
       ]
       logConfiguration = {
         logDriver = "awslogs",

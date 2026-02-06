@@ -1,26 +1,32 @@
 const express = require('express');
-const helmet = require('helmet');
-const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const authRoutes = require('./routes/authRoutes');
 const transactionRoutes = require('./routes/transactionRoutes');
 const analyticsRoutes = require('./routes/analyticsRoutes');
 const accountRoutes = require('./routes/accountRoutes');
 const categoryRoutes = require('./routes/categoryRoutes');
+const userRoutes = require('./routes/userRoutes');
+const expenseRoutes = require('./routes/expenseRoutes');
+const incomeRoutes = require('./routes/incomeRoutes');
+const budgetRoutes = require('./routes/budgetRoutes');
+const reportRoutes = require('./routes/reportRoutes');
+const bankRoutes = require('./routes/bankRoutes');
+const investmentRoutes = require('./routes/investmentRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
+const settingsRoutes = require('./routes/settingsRoutes');
 const authMiddleware = require('./middleware/authMiddleware');
+const securityHeaders = require('./middleware/securityHeaders');
 const errorHandler = require('./middleware/errorHandler');
 const logger = require('./utils/logger');
+const AuthService = require('./services/AuthService');
 require('dotenv').config();
 
 const app = express();
 
 // Security Middleware
-app.use(helmet());
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-  credentials: true,
-  optionsSuccessStatus: 200
-}));
+app.disable('x-powered-by');
+app.set('trust proxy', 1);
+app.use(securityHeaders);
 
 // Rate Limiting
 const limiter = rateLimit({
@@ -58,6 +64,15 @@ app.use('/api/v1/transactions', authMiddleware, transactionRoutes);
 app.use('/api/v1/analytics', authMiddleware, analyticsRoutes);
 app.use('/api/v1/accounts', authMiddleware, accountRoutes);
 app.use('/api/v1/categories', authMiddleware, categoryRoutes);
+app.use('/api/v1/users', authMiddleware, userRoutes);
+app.use('/api/v1/expenses', authMiddleware, expenseRoutes);
+app.use('/api/v1/income', authMiddleware, incomeRoutes);
+app.use('/api/v1/budgets', authMiddleware, budgetRoutes);
+app.use('/api/v1/reports', authMiddleware, reportRoutes);
+app.use('/api/v1/banks', authMiddleware, bankRoutes);
+app.use('/api/v1/investments', authMiddleware, investmentRoutes);
+app.use('/api/v1/notifications', authMiddleware, notificationRoutes);
+app.use('/api/v1/settings', authMiddleware, settingsRoutes);
 
 // Health Check
 app.get('/health', (req, res) => {
@@ -72,12 +87,94 @@ app.use((req, res) => {
 // Error Handler
 app.use(errorHandler);
 
+// Scheduled cleanup for revoked refresh tokens
+const revokedTokenCleanupIntervalMs = 24 * 60 * 60 * 1000; // 24 hours
+const cleanupMetrics = {
+  lastRun: null,
+  lastSuccess: null,
+  lastFailure: null,
+  totalRuns: 0,
+  successfulRuns: 0,
+  failedRuns: 0,
+  totalTokensDeleted: 0,
+  averageCleanupMs: 0,
+  lastErrorMessage: null
+};
 
-const PORT = process.env.PORT || 3000;
-if (require.main === module) {
-  app.listen(PORT, () => {
-    logger.info(`RUPAYA Backend running on port ${PORT}`);
+const runRevokedTokenCleanup = async () => {
+  const startTime = Date.now();
+  cleanupMetrics.totalRuns++;
+  cleanupMetrics.lastRun = new Date().toISOString();
+
+  try {
+    const deleted = await AuthService.cleanupRevokedTokens();
+    const durationMs = Date.now() - startTime;
+    
+    cleanupMetrics.successfulRuns++;
+    cleanupMetrics.lastSuccess = new Date().toISOString();
+    cleanupMetrics.totalTokensDeleted += deleted;
+    cleanupMetrics.averageCleanupMs = 
+      (cleanupMetrics.averageCleanupMs * (cleanupMetrics.successfulRuns - 1) + durationMs) / 
+      cleanupMetrics.successfulRuns;
+    cleanupMetrics.lastErrorMessage = null;
+
+    logger.info({
+      message: 'Revoked token cleanup completed successfully',
+      deleted,
+      durationMs,
+      metrics: cleanupMetrics
+    });
+
+    // Alert if cleanup seems abnormal (0 tokens for 3+ consecutive runs)
+    if (deleted === 0 && cleanupMetrics.successfulRuns > 3) {
+      logger.warn({
+        message: 'ALERT: No expired tokens found in cleanup',
+        consecutiveZeroRuns: true,
+        suggestedAction: 'Verify if tokens are being revoked properly or if system time is incorrect'
+      });
+    }
+  } catch (error) {
+    const durationMs = Date.now() - startTime;
+    cleanupMetrics.failedRuns++;
+    cleanupMetrics.lastFailure = new Date().toISOString();
+    cleanupMetrics.lastErrorMessage = error.message;
+
+    // CRITICAL: Cleanup failed - needs immediate attention
+    logger.error({
+      severity: 'CRITICAL',
+      message: 'Revoked token cleanup FAILED',
+      error: error.message,
+      stack: error.stack,
+      durationMs,
+      failureCount: cleanupMetrics.failedRuns,
+      metrics: cleanupMetrics
+    });
+
+    // Alert operations team if cleanup fails consecutively
+    if (cleanupMetrics.failedRuns >= 2) {
+      logger.error({
+        severity: 'CRITICAL_ALERT',
+        message: `Token cleanup has failed ${cleanupMetrics.failedRuns} consecutive times`,
+        action: 'IMMEDIATE_ACTION_REQUIRED: Check database connection and revoked_tokens table integrity',
+        contactOps: true
+      });
+    }
+  }
+};
+
+// Endpoint to check cleanup metrics (admin only - add auth in production)
+app.get('/admin/cleanup-metrics', (req, res) => {
+  // TODO: Add proper admin authentication middleware
+  res.json({
+    metrics: cleanupMetrics,
+    status: cleanupMetrics.failedRuns === 0 ? 'healthy' : 'degraded',
+    nextScheduledRun: new Date(Date.now() + revokedTokenCleanupIntervalMs).toISOString()
   });
-}
+});
+
+// Run cleanup immediately on startup
+runRevokedTokenCleanup();
+// Schedule recurring cleanup every 24 hours
+setInterval(runRevokedTokenCleanup, revokedTokenCleanupIntervalMs);
 
 module.exports = app;

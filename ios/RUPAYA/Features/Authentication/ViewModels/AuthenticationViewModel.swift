@@ -170,6 +170,20 @@ class AuthenticationViewModel: ObservableObject {
     }
     
     func logout() {
+        if let refreshToken = keychainManager.retrieve("refresh_token") {
+            let request = LogoutRequest(refreshToken: refreshToken)
+            apiClient.request("/api/v1/auth/logout", method: "POST", body: request)
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] _ in
+                    self?.keychainManager.delete("access_token")
+                    self?.keychainManager.delete("refresh_token")
+                    self?.isAuthenticated = false
+                    self?.currentUser = nil
+                } receiveValue: { (_: LogoutResponse) in }
+                .store(in: &cancellables)
+            return
+        }
+
         keychainManager.delete("access_token")
         keychainManager.delete("refresh_token")
         isAuthenticated = false

@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rupaya-backend
+  labels:
+    app: rupaya-backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: rupaya-backend
+  template:
+    metadata:
+      labels:
+        app: rupaya-backend
+    spec:
+      containers:
+        - name: backend
+          image: <ECR_IMAGE_URL>:<TAG>
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: DB_HOST
+              value: <RDS_HOST>
+            - name: DB_USER
+              value: <DB_USER>
+            - name: DB_PASSWORD
+              value: <DB_PASSWORD>
+            - name: DB_NAME
+              value: <DB_NAME>
+            - name: REDIS_URL
+              value: <REDIS_URL>
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 30

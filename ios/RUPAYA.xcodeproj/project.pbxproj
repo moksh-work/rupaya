@@ -10,30 +10,62 @@
 		06DC8BEA16C003F2672B72E2 /* AuthenticationViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89F6BB80DF7C015722C4E474 /* AuthenticationViewModel.swift */; };
 		1D4DC19EE7800A3B11D0809D /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B30235B5C32DD8D5DD2985E /* MainTabView.swift */; };
 		22E02B71F03EE639D6CCBFEA /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C56B7EA8064567DC61C104FF /* LoginView.swift */; };
+		25AA28FDB08AC11D3C42C71F /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A01F4F8B2338095AF5CAE43 /* AboutView.swift */; };
+		35464C7682FF626906ED86E3 /* TransactionsFullView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E31045CD1E7088C5429A69E /* TransactionsFullView.swift */; };
 		37B79A2E3BFE43B416A66450 /* APIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = E24EED00213B6AF73F20BB65 /* APIModels.swift */; };
+		37FB21508967832AAAECDEF8 /* AccountsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFF39314BC6F7EB3E9B6A540 /* AccountsViewModel.swift */; };
+		3E386F877E2B27A678F3F1F3 /* PreferencesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 909B679F731268D3B62A5DF0 /* PreferencesView.swift */; };
+		4B58C765D5E3B65EFB78374A /* DataManagementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 982099C415FE385E74CE46E7 /* DataManagementView.swift */; };
+		660458625100F8D582F45930 /* AddTransactionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05AA8D04A11DA5606D5EF987 /* AddTransactionViewModel.swift */; };
+		697E532047E373548E431B69 /* SettingsTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 684CDF775A3D56A39C52C0D4 /* SettingsTabView.swift */; };
 		702FB5F07AB2A9DC799A0F79 /* SignupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3C0731AC2BD984FD9EF1D7F /* SignupView.swift */; };
 		773B8998F9E7B4D5B1412259 /* AuthenticationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94540F2817B7E151652A5F94 /* AuthenticationView.swift */; };
+		82013AAC4FF32C0F8D19A5EC /* AnalyticsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8842E04B707226C00ED25D2 /* AnalyticsViewModel.swift */; };
+		A147E61664405EDD9AD5967A /* AddTransactionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64E2EFE4F07548F967D24AFC /* AddTransactionView.swift */; };
 		A60657AD7381D90F2E0F1BCD /* BiometricManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B2DAECE0E1E6E355607B314 /* BiometricManager.swift */; };
 		AD77103F6E11E48EEE738D27 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1314F947EC70C6892234A24 /* APIClient.swift */; };
+		B2A60AA49AE00923FD8697D0 /* TransactionsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F492046BC45DB402CECB3890 /* TransactionsViewModel.swift */; };
+		BA5EA9919AAB4EBF148A2422 /* AppearanceSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3FE1AD2C1856C9C4D2ED389 /* AppearanceSettingsView.swift */; };
+		BDA0A765D9600D7BE586CC17 /* SecuritySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E71FEFD11D77E86A492AE47E /* SecuritySettingsView.swift */; };
+		CF62B527C416F0357119A520 /* InsightsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 252096C30D2BAA5299AC29F2 /* InsightsView.swift */; };
 		D73915641D3AA9B526192CFC /* KeychainManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 926CD17D082A50ABD267B972 /* KeychainManager.swift */; };
+		DD535228B2DE58BEED648DD0 /* EnhancedHomeViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E6A08D544B4328D1FF6028C /* EnhancedHomeViewModel.swift */; };
 		E3725D415AC76376D8C1A045 /* RUPAYAApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B8EEC971F965EDAF5C68192 /* RUPAYAApp.swift */; };
 		E818FD10D96DCB4E3EB8395F /* APIConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1B4F561192F746DF184DF18 /* APIConfig.swift */; };
+		FD8E41DF8177FE334CFF36D4 /* AccountsTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24C447164E979155A4F631A5 /* AccountsTabView.swift */; };
+		FE94BFE5D22A7FA453FF3D10 /* EnhancedHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CCA2681D5E2AEE093D62FA0 /* EnhancedHomeView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		05AA8D04A11DA5606D5EF987 /* AddTransactionViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = AddTransactionViewModel.swift; path = Transactions/AddTransactionViewModel.swift; sourceTree = "<group>"; };
 		0B2DAECE0E1E6E355607B314 /* BiometricManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BiometricManager.swift; sourceTree = "<group>"; };
 		0B30235B5C32DD8D5DD2985E /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
 		197AC8D4BE6BEBA9CBA5DEBC /* RUPAYA.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = RUPAYA.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		24C447164E979155A4F631A5 /* AccountsTabView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = AccountsTabView.swift; path = Accounts/AccountsTabView.swift; sourceTree = "<group>"; };
+		252096C30D2BAA5299AC29F2 /* InsightsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = InsightsView.swift; path = Analytics/InsightsView.swift; sourceTree = "<group>"; };
+		5A01F4F8B2338095AF5CAE43 /* AboutView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = AboutView.swift; path = Settings/AboutView.swift; sourceTree = "<group>"; };
+		64E2EFE4F07548F967D24AFC /* AddTransactionView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = AddTransactionView.swift; path = Transactions/AddTransactionView.swift; sourceTree = "<group>"; };
+		684CDF775A3D56A39C52C0D4 /* SettingsTabView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SettingsTabView.swift; path = Settings/SettingsTabView.swift; sourceTree = "<group>"; };
 		6B8EEC971F965EDAF5C68192 /* RUPAYAApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RUPAYAApp.swift; sourceTree = "<group>"; };
+		6E31045CD1E7088C5429A69E /* TransactionsFullView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TransactionsFullView.swift; path = Transactions/TransactionsFullView.swift; sourceTree = "<group>"; };
+		6E6A08D544B4328D1FF6028C /* EnhancedHomeViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = EnhancedHomeViewModel.swift; path = Home/EnhancedHomeViewModel.swift; sourceTree = "<group>"; };
 		89F6BB80DF7C015722C4E474 /* AuthenticationViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticationViewModel.swift; sourceTree = "<group>"; };
 		904BC68679D4E76CF9356602 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		909B679F731268D3B62A5DF0 /* PreferencesView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = PreferencesView.swift; path = Settings/PreferencesView.swift; sourceTree = "<group>"; };
 		926CD17D082A50ABD267B972 /* KeychainManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainManager.swift; sourceTree = "<group>"; };
 		94540F2817B7E151652A5F94 /* AuthenticationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticationView.swift; sourceTree = "<group>"; };
+		982099C415FE385E74CE46E7 /* DataManagementView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = DataManagementView.swift; path = Settings/DataManagementView.swift; sourceTree = "<group>"; };
+		9CCA2681D5E2AEE093D62FA0 /* EnhancedHomeView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = EnhancedHomeView.swift; path = Home/EnhancedHomeView.swift; sourceTree = "<group>"; };
+		AFF39314BC6F7EB3E9B6A540 /* AccountsViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = AccountsViewModel.swift; path = Accounts/AccountsViewModel.swift; sourceTree = "<group>"; };
 		C1B4F561192F746DF184DF18 /* APIConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIConfig.swift; sourceTree = "<group>"; };
+		C3FE1AD2C1856C9C4D2ED389 /* AppearanceSettingsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = AppearanceSettingsView.swift; path = Settings/AppearanceSettingsView.swift; sourceTree = "<group>"; };
 		C56B7EA8064567DC61C104FF /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
 		D3C0731AC2BD984FD9EF1D7F /* SignupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignupView.swift; sourceTree = "<group>"; };
 		E24EED00213B6AF73F20BB65 /* APIModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIModels.swift; sourceTree = "<group>"; };
+		E71FEFD11D77E86A492AE47E /* SecuritySettingsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SecuritySettingsView.swift; path = Settings/SecuritySettingsView.swift; sourceTree = "<group>"; };
+		E8842E04B707226C00ED25D2 /* AnalyticsViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = AnalyticsViewModel.swift; path = Analytics/AnalyticsViewModel.swift; sourceTree = "<group>"; };
 		F1314F947EC70C6892234A24 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
+		F492046BC45DB402CECB3890 /* TransactionsViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TransactionsViewModel.swift; path = Transactions/TransactionsViewModel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -43,6 +75,30 @@
 				E24EED00213B6AF73F20BB65 /* APIModels.swift */,
 			);
 			path = Models;
+			sourceTree = "<group>";
+		};
+		4065F1E62D2AF5392912CA92 /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				684CDF775A3D56A39C52C0D4 /* SettingsTabView.swift */,
+				E71FEFD11D77E86A492AE47E /* SecuritySettingsView.swift */,
+				909B679F731268D3B62A5DF0 /* PreferencesView.swift */,
+				C3FE1AD2C1856C9C4D2ED389 /* AppearanceSettingsView.swift */,
+				982099C415FE385E74CE46E7 /* DataManagementView.swift */,
+				5A01F4F8B2338095AF5CAE43 /* AboutView.swift */,
+			);
+			name = Settings;
+			sourceTree = "<group>";
+		};
+		4799FAFAEDB9D566D36B95F2 /* Transactions */ = {
+			isa = PBXGroup;
+			children = (
+				64E2EFE4F07548F967D24AFC /* AddTransactionView.swift */,
+				05AA8D04A11DA5606D5EF987 /* AddTransactionViewModel.swift */,
+				6E31045CD1E7088C5429A69E /* TransactionsFullView.swift */,
+				F492046BC45DB402CECB3890 /* TransactionsViewModel.swift */,
+			);
+			name = Transactions;
 			sourceTree = "<group>";
 		};
 		58914FA4EA6AD551774FD89A /* ViewModels */ = {
@@ -66,6 +122,11 @@
 			isa = PBXGroup;
 			children = (
 				EFAA64B47F4D475344EA7E96 /* Authentication */,
+				DC9F6E83C0CD01C8BBFD333C /* Home */,
+				E07CA5B90EB26AE9A2294333 /* Analytics */,
+				4799FAFAEDB9D566D36B95F2 /* Transactions */,
+				BEB0502BCF5C41CF3C64BED6 /* Accounts */,
+				4065F1E62D2AF5392912CA92 /* Settings */,
 			);
 			path = Features;
 			sourceTree = "<group>";
@@ -97,6 +158,15 @@
 			path = Networking;
 			sourceTree = "<group>";
 		};
+		BEB0502BCF5C41CF3C64BED6 /* Accounts */ = {
+			isa = PBXGroup;
+			children = (
+				24C447164E979155A4F631A5 /* AccountsTabView.swift */,
+				AFF39314BC6F7EB3E9B6A540 /* AccountsViewModel.swift */,
+			);
+			name = Accounts;
+			sourceTree = "<group>";
+		};
 		C3B07215246300AD223CE20D /* RUPAYA */ = {
 			isa = PBXGroup;
 			children = (
@@ -115,6 +185,24 @@
 				C3B07215246300AD223CE20D /* RUPAYA */,
 				E69A6F4D296966454318E363 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		DC9F6E83C0CD01C8BBFD333C /* Home */ = {
+			isa = PBXGroup;
+			children = (
+				9CCA2681D5E2AEE093D62FA0 /* EnhancedHomeView.swift */,
+				6E6A08D544B4328D1FF6028C /* EnhancedHomeViewModel.swift */,
+			);
+			name = Home;
+			sourceTree = "<group>";
+		};
+		E07CA5B90EB26AE9A2294333 /* Analytics */ = {
+			isa = PBXGroup;
+			children = (
+				252096C30D2BAA5299AC29F2 /* InsightsView.swift */,
+				E8842E04B707226C00ED25D2 /* AnalyticsViewModel.swift */,
+			);
+			name = Analytics;
 			sourceTree = "<group>";
 		};
 		E69A6F4D296966454318E363 /* Products */ = {
@@ -158,8 +246,6 @@
 			dependencies = (
 			);
 			name = RUPAYA;
-			packageProductDependencies = (
-			);
 			productName = RUPAYA;
 			productReference = 197AC8D4BE6BEBA9CBA5DEBC /* RUPAYA.app */;
 			productType = "com.apple.product-type.application";
@@ -190,6 +276,7 @@
 			mainGroup = CACA5654DFBC2639FAAA6745;
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
+			productRefGroup = E69A6F4D296966454318E363 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -214,6 +301,22 @@
 				1D4DC19EE7800A3B11D0809D /* MainTabView.swift in Sources */,
 				E3725D415AC76376D8C1A045 /* RUPAYAApp.swift in Sources */,
 				702FB5F07AB2A9DC799A0F79 /* SignupView.swift in Sources */,
+				FE94BFE5D22A7FA453FF3D10 /* EnhancedHomeView.swift in Sources */,
+				DD535228B2DE58BEED648DD0 /* EnhancedHomeViewModel.swift in Sources */,
+				CF62B527C416F0357119A520 /* InsightsView.swift in Sources */,
+				82013AAC4FF32C0F8D19A5EC /* AnalyticsViewModel.swift in Sources */,
+				A147E61664405EDD9AD5967A /* AddTransactionView.swift in Sources */,
+				660458625100F8D582F45930 /* AddTransactionViewModel.swift in Sources */,
+				35464C7682FF626906ED86E3 /* TransactionsFullView.swift in Sources */,
+				B2A60AA49AE00923FD8697D0 /* TransactionsViewModel.swift in Sources */,
+				FD8E41DF8177FE334CFF36D4 /* AccountsTabView.swift in Sources */,
+				37FB21508967832AAAECDEF8 /* AccountsViewModel.swift in Sources */,
+				697E532047E373548E431B69 /* SettingsTabView.swift in Sources */,
+				BDA0A765D9600D7BE586CC17 /* SecuritySettingsView.swift in Sources */,
+				3E386F877E2B27A678F3F1F3 /* PreferencesView.swift in Sources */,
+				BA5EA9919AAB4EBF148A2422 /* AppearanceSettingsView.swift in Sources */,
+				4B58C765D5E3B65EFB78374A /* DataManagementView.swift in Sources */,
+				25AA28FDB08AC11D3C42C71F /* AboutView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

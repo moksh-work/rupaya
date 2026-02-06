@@ -1,0 +1,943 @@
+openapi: 3.0.3
+info:
+  title: RUPAYA Money Manager API
+  description: |
+    Complete RESTful API for RUPAYA Money Manager application.
+    
+    ## Features
+    - 🔐 JWT Authentication with MFA support
+    - 💰 Expense & Income tracking
+    - 📊 Budget management & progress tracking
+    - 🏦 Bank account integration
+    - 📈 Investment portfolio management
+    - 🔔 Real-time notifications
+    - 📱 Multi-device support
+    - 🔒 Security & data privacy controls
+    
+    ## Authentication
+    Most endpoints require authentication via Bearer token in the Authorization header:
+    ```
+    Authorization: Bearer <your_jwt_token>
+    ```
+  version: 3.0.0
+  contact:
+    name: RUPAYA Support
+    email: support@rupaya.com
+  license:
+    name: Proprietary
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Local Development
+  - url: https://staging-api.rupaya.com/api/v1
+    description: Staging
+  - url: https://api.rupaya.com/api/v1
+    description: Production
+
+tags:
+  - name: Authentication
+    description: User authentication and authorization
+  - name: Users
+    description: User profile management
+  - name: Accounts
+    description: Financial account management
+  - name: Categories
+    description: Transaction categorization
+  - name: Transactions
+    description: Transaction operations
+  - name: Expenses
+    description: Expense tracking and management
+  - name: Income
+    description: Income tracking and management
+  - name: Budgets
+    description: Budget planning and monitoring
+  - name: Reports
+    description: Analytics and reporting
+  - name: Banks
+    description: Bank account integration
+  - name: Investments
+    description: Investment portfolio management
+  - name: Notifications
+    description: Notification system
+  - name: Settings
+    description: User settings and preferences
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  
+  schemas:
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: "Error message"
+        errors:
+          type: array
+          items:
+            type: object
+    
+    User:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        currency_preference:
+          type: string
+          example: "USD"
+        created_at:
+          type: string
+          format: date-time
+    
+    Account:
+      type: object
+      properties:
+        account_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        account_type:
+          type: string
+          enum: [cash, bank, credit_card, investment, savings]
+        current_balance:
+          type: number
+          format: double
+        currency:
+          type: string
+        is_default:
+          type: boolean
+    
+    Category:
+      type: object
+      properties:
+        category_id:
+          type: integer
+        name:
+          type: string
+        category_type:
+          type: string
+          enum: [income, expense, transfer]
+        icon:
+          type: string
+        color:
+          type: string
+        is_system:
+          type: boolean
+    
+    Expense:
+      type: object
+      properties:
+        expense_id:
+          type: integer
+        user_id:
+          type: string
+          format: uuid
+        category_id:
+          type: integer
+        amount:
+          type: number
+          format: double
+        description:
+          type: string
+        expense_date:
+          type: string
+          format: date
+        merchant:
+          type: string
+        tags:
+          type: object
+        created_at:
+          type: string
+          format: date-time
+    
+    Budget:
+      type: object
+      properties:
+        budget_id:
+          type: integer
+        name:
+          type: string
+        amount:
+          type: number
+          format: double
+        period:
+          type: string
+          enum: [daily, weekly, monthly, quarterly, yearly, custom]
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        alert_threshold:
+          type: number
+          format: double
+
+paths:
+  # ==================== AUTHENTICATION ====================
+  /auth/signup:
+    post:
+      tags: [Authentication]
+      summary: Register new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, name]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 8
+                name:
+                  type: string
+      responses:
+        '201':
+          description: User registered successfully
+        '400':
+          description: Validation error
+  
+  /auth/signin:
+    post:
+      tags: [Authentication]
+      summary: User login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  accessToken:
+                    type: string
+                  refreshToken:
+                    type: string
+                  user:
+                    $ref: '#/components/schemas/User'
+  
+  /auth/refresh:
+    post:
+      tags: [Authentication]
+      summary: Refresh access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        '200':
+          description: Token refreshed
+
+  # ==================== EXPENSES ====================
+  /expenses:
+    post:
+      tags: [Expenses]
+      summary: Create new expense
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount, expense_date]
+              properties:
+                category_id:
+                  type: integer
+                amount:
+                  type: number
+                description:
+                  type: string
+                expense_date:
+                  type: string
+                  format: date
+                merchant:
+                  type: string
+                payment_method:
+                  type: string
+                tags:
+                  type: object
+      responses:
+        '201':
+          description: Expense created
+        '401':
+          description: Unauthorized
+    
+    get:
+      tags: [Expenses]
+      summary: List expenses
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: category_id
+          in: query
+          schema:
+            type: integer
+        - name: start_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of expenses
+  
+  /expenses/{id}:
+    get:
+      tags: [Expenses]
+      summary: Get expense by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Expense details
+        '404':
+          description: Not found
+    
+    put:
+      tags: [Expenses]
+      summary: Update expense
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount:
+                  type: number
+                description:
+                  type: string
+                category_id:
+                  type: integer
+      responses:
+        '200':
+          description: Expense updated
+    
+    delete:
+      tags: [Expenses]
+      summary: Delete expense
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Expense deleted
+
+  /expenses/statistics:
+    get:
+      tags: [Expenses]
+      summary: Get expense statistics
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: start_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Statistics data
+
+  # ==================== INCOME ====================
+  /income:
+    post:
+      tags: [Income]
+      summary: Create income record
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount, income_date]
+              properties:
+                category_id:
+                  type: integer
+                amount:
+                  type: number
+                description:
+                  type: string
+                income_date:
+                  type: string
+                  format: date
+                source:
+                  type: string
+      responses:
+        '201':
+          description: Income created
+    
+    get:
+      tags: [Income]
+      summary: List income records
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: List of income
+
+  /income/{id}:
+    get:
+      tags: [Income]
+      summary: Get income by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Income details
+    
+    put:
+      tags: [Income]
+      summary: Update income
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Income updated
+    
+    delete:
+      tags: [Income]
+      summary: Delete income
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Income deleted
+
+  # ==================== BUDGETS ====================
+  /budgets:
+    post:
+      tags: [Budgets]
+      summary: Create budget
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, amount, period, start_date]
+              properties:
+                name:
+                  type: string
+                amount:
+                  type: number
+                period:
+                  type: string
+                  enum: [daily, weekly, monthly, quarterly, yearly, custom]
+                start_date:
+                  type: string
+                  format: date
+                category_id:
+                  type: integer
+      responses:
+        '201':
+          description: Budget created
+    
+    get:
+      tags: [Budgets]
+      summary: List budgets
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of budgets
+
+  /budgets/{id}:
+    get:
+      tags: [Budgets]
+      summary: Get budget details
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Budget details
+    
+    put:
+      tags: [Budgets]
+      summary: Update budget
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Budget updated
+    
+    delete:
+      tags: [Budgets]
+      summary: Delete budget
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Budget deleted
+
+  /budgets/{id}/progress:
+    get:
+      tags: [Budgets]
+      summary: Get budget progress
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Budget progress data
+
+  # ==================== REPORTS ====================
+  /reports/dashboard:
+    get:
+      tags: [Reports]
+      summary: Get dashboard summary
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [monthly, yearly, last30days]
+      responses:
+        '200':
+          description: Dashboard data
+
+  /reports/trends:
+    get:
+      tags: [Reports]
+      summary: Get spending trends
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: months
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 60
+      responses:
+        '200':
+          description: Trend data
+
+  /reports/category-spending:
+    get:
+      tags: [Reports]
+      summary: Category spending breakdown
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: startDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Category spending data
+
+  # ==================== BANKS ====================
+  /banks/connect:
+    post:
+      tags: [Banks]
+      summary: Initiate bank connection
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [bank_provider, redirect_uri]
+              properties:
+                bank_provider:
+                  type: string
+                  enum: [plaid, yodlee, fintech-api, open-banking]
+                redirect_uri:
+                  type: string
+      responses:
+        '200':
+          description: Authorization URL generated
+
+  /banks/accounts:
+    get:
+      tags: [Banks]
+      summary: List connected bank accounts
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of bank accounts
+
+  /banks/accounts/{id}/sync:
+    post:
+      tags: [Banks]
+      summary: Sync bank transactions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Sync completed
+
+  # ==================== INVESTMENTS ====================
+  /investments:
+    post:
+      tags: [Investments]
+      summary: Add investment
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [investment_type, name, quantity, purchase_price, current_price, purchase_date]
+              properties:
+                investment_type:
+                  type: string
+                  enum: [stock, bond, mutual_fund, etf, crypto, real_estate, commodity, other]
+                symbol:
+                  type: string
+                name:
+                  type: string
+                quantity:
+                  type: number
+                purchase_price:
+                  type: number
+                current_price:
+                  type: number
+                purchase_date:
+                  type: string
+                  format: date
+      responses:
+        '201':
+          description: Investment created
+    
+    get:
+      tags: [Investments]
+      summary: List investments
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of investments
+
+  /investments/portfolio:
+    get:
+      tags: [Investments]
+      summary: Get portfolio summary
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Portfolio summary with gains/losses
+
+  /investments/{id}:
+    put:
+      tags: [Investments]
+      summary: Update investment
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Investment updated
+    
+    delete:
+      tags: [Investments]
+      summary: Delete investment
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Investment deleted
+
+  # ==================== NOTIFICATIONS ====================
+  /notifications:
+    get:
+      tags: [Notifications]
+      summary: List notifications
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+        - name: is_read
+          in: query
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: List of notifications
+
+  /notifications/{id}/read:
+    put:
+      tags: [Notifications]
+      summary: Mark notification as read
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Notification marked as read
+
+  /notifications/mark-all-read:
+    put:
+      tags: [Notifications]
+      summary: Mark all notifications as read
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: All notifications marked as read
+
+  /notifications/preferences:
+    get:
+      tags: [Notifications]
+      summary: Get notification preferences
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Notification preferences
+    
+    put:
+      tags: [Notifications]
+      summary: Update notification preferences
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email_on_expense:
+                  type: boolean
+                push_on_budget_alert:
+                  type: boolean
+                daily_digest:
+                  type: boolean
+      responses:
+        '200':
+          description: Preferences updated
+
+  # ==================== SETTINGS ====================
+  /settings:
+    get:
+      tags: [Settings]
+      summary: Get user settings
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User settings
+    
+    put:
+      tags: [Settings]
+      summary: Update user settings
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                theme:
+                  type: string
+                  enum: [light, dark]
+                language:
+                  type: string
+                currency:
+                  type: string
+      responses:
+        '200':
+          description: Settings updated
+
+  /settings/security:
+    get:
+      tags: [Settings]
+      summary: Get security settings
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Security settings
+
+  /settings/export-data:
+    post:
+      tags: [Settings]
+      summary: Request data export
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                export_type:
+                  type: string
+                  enum: [full, expenses, income, budgets, transactions]
+      responses:
+        '202':
+          description: Export request submitted

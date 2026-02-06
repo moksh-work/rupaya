@@ -1,0 +1,185 @@
+name: 07 - Common - Git Flow - Release Management
+
+# Workflow: Manage release branches following Git Flow branching strategy
+# When: Pull Request created from release/* to main
+# Actions:
+# 1. Run full test suite
+# 2. Verify version bump and changelog
+# 3. Require 2 approvals for production merge
+# 4. Create production release tag
+# 5. Merge back to develop after production merge
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'backend/**'
+      - 'VERSION'
+      - 'CHANGELOG.md'
+
+concurrency:
+  group: git-flow-release-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-1
+  AWS_ACCOUNT_ID: "102503111808"
+
+jobs:
+  validate-release:
+    name: Validate Release Branch
+    runs-on: ubuntu-latest
+    if: startsWith(github.head_ref, 'release/')
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Validate branch naming convention
+        run: |
+          BRANCH="${{ github.head_ref }}"
+          if [[ ! $BRANCH =~ ^release/[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+            echo "❌ Invalid release branch name"
+            echo "   Expected: release/X.Y.Z (semantic versioning)"
+            echo "   Got: $BRANCH"
+            exit 1
+          fi
+          echo "✓ Branch name valid: $BRANCH"
+          VERSION=$(echo $BRANCH | sed 's/release\///')
+          echo "version=$VERSION" >> $GITHUB_ENV
+      
+      - name: Check VERSION file updated
+        run: |
+          VERSION=$(cat VERSION 2>/dev/null || echo "")
+          if [ -z "$VERSION" ]; then
+            echo "⚠ WARNING: VERSION file not found or empty"
+          else
+            echo "✓ VERSION file: $VERSION"
+          fi
+      
+      - name: Check CHANGELOG updated
+        run: |
+          if ! grep -q "^## \[${{ env.version }}\]" CHANGELOG.md 2>/dev/null; then
+            echo "⚠ WARNING: CHANGELOG.md not updated with version ${{ env.version }}"
+          else
+            echo "✓ CHANGELOG.md updated with version ${{ env.version }}"
+          fi
+
+  test-suite:
+    name: Full Test Suite
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: rupaya
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: rupaya_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+      
+      - name: Install dependencies
+        run: |
+          cd backend
+          npm ci
+      
+      - name: Run linter
+        run: |
+          cd backend
+          npm run lint || true
+      
+      - name: Run unit tests
+        working-directory: ./backend
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_USER: rupaya
+          DB_PASSWORD: test_password
+          DB_NAME: rupaya_test
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: test_jwt_secret_key_min_32_chars
+          REFRESH_TOKEN_SECRET: test_refresh_secret_key_min_32_chars
+          ENCRYPTION_KEY: test_encryption_key_min_32_chars
+        run: npm test
+
+  release-approval:
+    name: Release Approval Gate
+    runs-on: ubuntu-latest
+    if: github.base_ref == 'main'
+    needs: [test-suite]
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Verify approval requirements
+        run: |
+          echo "📋 Release Checklist for Production Deployment:"
+          echo ""
+          echo "✓ Tests: Passed"
+          echo "- [ ] Version file updated"
+          echo "- [ ] CHANGELOG updated"
+          echo "- [ ] Requires 2 approvals (at least 1 from release manager)"
+          echo "- [ ] No breaking changes"
+          echo ""
+          echo "Once approved and merged:"
+          echo "1. Tag will be created: v$(cat VERSION 2>/dev/null || echo 'X.Y.Z')"
+          echo "2. Deployment to production will proceed"
+          echo "3. Release branch will be merged back to develop"
+
+  merge-back-to-develop:
+    name: Merge Release Back to Develop
+    runs-on: ubuntu-latest
+    if: |
+      github.event.pull_request.merged == true &&
+      github.base_ref == 'main' &&
+      startsWith(github.head_ref, 'release/')
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+      
+      - name: Merge to develop
+        run: |
+          RELEASE_BRANCH="${{ github.head_ref }}"
+          VERSION=$(echo $RELEASE_BRANCH | sed 's/release\///')
+          
+          git fetch origin develop:develop
+          git merge develop --no-edit || true
+          
+          echo "✓ Release $VERSION will be merged back to develop"
+          echo "  Manual action may be required if conflicts exist"

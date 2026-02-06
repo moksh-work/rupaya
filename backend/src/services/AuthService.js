@@ -253,9 +253,78 @@ class AuthService {
         throw new Error('Invalid refresh token format');
       }
 
+      if (decoded.tokenId) {
+        const revoked = await db('revoked_tokens')
+          .where({ token_id: decoded.tokenId })
+          .first();
+        if (revoked) {
+          throw new Error('Refresh token has been revoked');
+        }
+      }
+
       return this.generateAccessToken(decoded.userId, decoded.deviceId);
     } catch (error) {
       throw new Error('Invalid refresh token');
+    }
+  }
+
+  static async revokeRefreshToken(refreshToken) {
+    const decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
+
+    if (!decoded.tokenId || !decoded.userId) {
+      throw new Error('Invalid refresh token format');
+    }
+
+    const expiresAt = decoded.exp ? new Date(decoded.exp * 1000) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    await db('revoked_tokens')
+      .insert({
+        token_id: decoded.tokenId,
+        user_id: decoded.userId,
+        token_type: 'refresh',
+        expires_at: expiresAt
+      })
+      .onConflict('token_id')
+      .ignore();
+
+    return true;
+  }
+
+  static async cleanupRevokedTokens() {
+    try {
+      // Get count of expired tokens before deletion
+      const expiredTokens = await db('revoked_tokens')
+        .where('expires_at', '<', new Date())
+        .count('* as count')
+        .first();
+
+      const countBeforeDelete = expiredTokens?.count || 0;
+
+      // Delete expired tokens
+      const deletedCount = await db('revoked_tokens')
+        .where('expires_at', '<', new Date())
+        .del();
+
+      // Verify deletion (as sanity check)
+      const remainingExpired = await db('revoked_tokens')
+        .where('expires_at', '<', new Date())
+        .count('* as count')
+        .first();
+
+      // Get total active revoked tokens
+      const activeRevoked = await db('revoked_tokens')
+        .where('expires_at', '>=', new Date())
+        .count('* as count')
+        .first();
+
+      return {
+        deleted: deletedCount,
+        expectedDeleted: countBeforeDelete,
+        activeRevoked: activeRevoked?.count || 0,
+        remainingExpired: remainingExpired?.count || 0
+      };
+    } catch (error) {
+      throw new Error(`Token cleanup failed: ${error.message}`);
     }
   }
 

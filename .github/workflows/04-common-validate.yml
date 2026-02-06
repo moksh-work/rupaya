@@ -1,0 +1,215 @@
+name: 04 - Common - Validate & Test (All Branches)
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - release/**
+      - feature/**
+      - bugfix/**
+      - hotfix/**
+  pull_request:
+    branches:
+      - main
+      - develop
+      - release/**
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ========== LINTING & CODE QUALITY ==========
+  lint-and-quality:
+    name: Lint & Code Quality
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'backend/package-lock.json'
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          npm ci
+
+      - name: Run ESLint
+        run: |
+          cd backend
+          npm run lint --if-present || echo "Lint script not found"
+
+      - name: Check code formatting
+        run: |
+          cd backend
+          npm run format:check --if-present || echo "Format check not found"
+
+      - name: SonarQube analysis (optional)
+        run: |
+          echo "SonarQube integration would go here"
+
+  # ========== BACKEND TESTS ==========
+  backend-tests:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: rupaya_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'backend/package-lock.json'
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          npm ci
+
+      - name: Run tests
+        run: |
+          cd backend
+          npm test -- --coverage
+        env:
+          DATABASE_URL: postgres://test_user:test_password@localhost:5432/rupaya_test
+          NODE_ENV: test
+          JWT_SECRET: test-secret
+          REDIS_URL: redis://localhost:6379
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./backend/coverage/coverage-final.json
+          flags: backend
+
+  # ========== SECURITY SCANNING ==========
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload to GitHub Security
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Dependency check
+        run: |
+          cd backend
+          npm audit --audit-level=moderate || echo "⚠️ Vulnerabilities found - review before merge"
+
+  # ========== BUILD VERIFICATION ==========
+  build-check:
+    name: Build Verification
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Build backend
+        run: |
+          cd backend
+          npm run build --if-present || echo "No build script"
+
+  # ========== BRANCH-SPECIFIC CHECKS ==========
+  branch-validation:
+    name: Branch Validation
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate branch name
+        run: |
+          BRANCH_NAME="${{ github.head_ref || github.ref_name }}"
+          
+          # Valid branch patterns
+          if [[ $BRANCH_NAME =~ ^(main|develop|release/|feature/|bugfix/|hotfix/|chore/).*$ ]]; then
+            echo "✅ Branch name '$BRANCH_NAME' follows naming convention"
+          else
+            echo "❌ Branch name '$BRANCH_NAME' does not follow convention"
+            echo "Valid patterns: main, develop, release/*, feature/*, bugfix/*, hotfix/*, chore/*"
+            exit 1
+          fi
+
+      - name: Check for main branch
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          echo "🚨 Direct push to main detected"
+          echo "ℹ️  Use: git push origin feature/your-feature && create PR"
+          exit 1
+
+  # ========== FINAL STATUS ==========
+  check-status:
+    name: Check Overall Status
+    needs: [lint-and-quality, backend-tests, security-scan, build-check]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Determine job statuses
+        run: |
+          if [ "${{ needs.lint-and-quality.result }}" != "success" ]; then
+            echo "❌ Linting failed"
+            exit 1
+          fi
+          if [ "${{ needs.backend-tests.result }}" != "success" ]; then
+            echo "❌ Tests failed"
+            exit 1
+          fi
+          if [ "${{ needs.security-scan.result }}" != "success" ]; then
+            echo "⚠️  Security scan warnings"
+            # Don't fail on security warnings
+          fi
+          echo "✅ All checks passed"

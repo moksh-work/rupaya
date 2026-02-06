@@ -1,0 +1,166 @@
+name: 02 - Common - Backend CI/CD Pipeline
+
+# Workflow: Backend testing and deployment following Git Flow branching
+# feature/* → Run tests only (no deployment)
+# develop → Auto-deploy to staging
+# release/* → Manual approval for staging final test
+# main → Auto-deploy to production
+# hotfix/* → Emergency production deployment
+
+on:
+  pull_request:
+    branches: [develop, main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend.yml'
+  push:
+    branches: [develop, main, release/*, hotfix/*]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: backend-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  AWS_REGION: us-east-1
+  AWS_ACCOUNT_ID: "102503111808"
+  AWS_ROLE_NAME: "rupaya-terraform-cicd"
+  NODE_ENV: production
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: rupaya
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: rupaya_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: backend/package-lock.json
+    
+    - name: Install dependencies
+      working-directory: ./backend
+      run: npm ci
+    
+    - name: Run linter
+      working-directory: ./backend
+      run: npm run lint || true
+    
+    - name: Run tests
+      working-directory: ./backend
+      env:
+        DB_HOST: localhost
+        DB_PORT: 5432
+        DB_USER: rupaya
+        DB_PASSWORD: test_password
+        DB_NAME: rupaya_test
+        REDIS_URL: redis://localhost:6379
+        JWT_SECRET: test_jwt_secret_key_min_32_chars
+        REFRESH_TOKEN_SECRET: test_refresh_secret_key_min_32_chars
+        ENCRYPTION_KEY: test_encryption_key_min_32_chars
+      run: npm test
+    
+    - name: Upload coverage
+      uses: codecov/codecov-action@v3
+      with:
+        files: ./backend/coverage/lcov.info
+        flags: backend
+
+  build:
+    name: Build & Push Image
+    needs: test
+    runs-on: ubuntu-latest
+    # Build only on: develop (staging), release/* (pre-prod), main (prod), hotfix/* (urgent prod)
+    if: github.event_name == 'push' && (
+          github.ref == 'refs/heads/develop' ||
+          github.ref == 'refs/heads/main' ||
+          startsWith(github.ref, 'refs/heads/release/') ||
+          startsWith(github.ref, 'refs/heads/hotfix/')
+        )
+    permissions:
+      contents: read
+      id-token: write
+    
+    outputs:
+      image-uri: ${{ steps.image.outputs.uri }}
+      image-tag: ${{ steps.image.outputs.tag }}
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Determine deployment environment
+      id: env
+      run: |
+        if [ "${{ github.ref }}" = "refs/heads/develop" ]; then
+          echo "environment=staging" >> "$GITHUB_OUTPUT"
+          echo "ecr_tag=staging-${{ github.sha }}" >> "$GITHUB_OUTPUT"
+        elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
+          echo "environment=production" >> "$GITHUB_OUTPUT"
+          echo "ecr_tag=prod-${{ github.sha }}" >> "$GITHUB_OUTPUT"
+        elif [[ "${{ github.ref }}" =~ ^refs/heads/release/ ]]; then
+          echo "environment=production" >> "$GITHUB_OUTPUT"
+          echo "ecr_tag=release-${{ github.sha }}" >> "$GITHUB_OUTPUT"
+        elif [[ "${{ github.ref }}" =~ ^refs/heads/hotfix/ ]]; then
+          echo "environment=production" >> "$GITHUB_OUTPUT"
+          echo "ecr_tag=hotfix-${{ github.sha }}" >> "$GITHUB_OUTPUT"
+        fi
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Configure AWS credentials (OIDC)
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/${{ env.AWS_ROLE_NAME }}
+        aws-region: ${{ env.AWS_REGION }}
+    
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
+    
+    - name: Build and push Docker image
+      working-directory: ./backend
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: rupaya-backend
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG --target production .
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+    
+    - name: Deploy to ECS
+      run: |
+        aws ecs update-service --cluster rupaya-cluster --service rupaya-backend --force-new-deployment

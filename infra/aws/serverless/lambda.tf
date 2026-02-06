@@ -59,6 +59,8 @@ resource "aws_lambda_function" "api" {
       REDIS_URL     = "redis://${aws_elasticache_replication_group.redis.primary_endpoint_address}:6379"
       # For Lambda Web Adapter, uncomment if your image uses it
       # AWS_LAMBDA_EXEC_WRAPPER = "/opt/bootstrap"
+      LOG_GROUP     = aws_cloudwatch_log_group.lambda.name
     }
   }
+  depends_on = [aws_cloudwatch_log_group.lambda]
 }

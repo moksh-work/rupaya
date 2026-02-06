@@ -1,0 +1,52 @@
+# CODEOWNERS - Defines code ownership and review requirements
+# More info: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Global owners - notified on all changes
+* @your-org/platform-team
+
+# Backend code
+backend/ @your-org/backend-team
+backend/src/services/ @your-org/backend-team @your-org/security-team
+backend/migrations/ @your-org/database-team
+
+# Frontend code (iOS/Android)
+ios/ @your-org/ios-team
+android/ @your-org/android-team
+
+# Infrastructure & DevOps
+infra/ @your-org/devops-team
+infra/aws/ @your-org/devops-team @your-org/aws-team
+infra/gcp/ @your-org/devops-team @your-org/gcp-team
+infra/bootstrap/ @your-org/devops-team @your-org/security-team
+
+# CI/CD Workflows
+.github/workflows/ @your-org/devops-team
+.github/workflows/01-aws-*.yml @your-org/devops-team @your-org/aws-team
+.github/workflows/01-gcp-*.yml @your-org/devops-team @your-org/gcp-team
+
+# Documentation
+docs/ @your-org/platform-team
+*.md @your-org/platform-team
+README.md @your-org/platform-team @your-org/devops-team
+
+# Security-sensitive files
+**/security/ @your-org/security-team
+*.tf @your-org/security-team @your-org/devops-team
+*.tfvars @your-org/security-team
+docker-compose*.yml @your-org/devops-team @your-org/security-team
+Dockerfile* @your-org/devops-team
+
+# Database schemas and migrations
+**/migrations/ @your-org/database-team @your-org/backend-team
+**/schema/ @your-org/database-team
+
+# Configuration files
+**/config/ @your-org/devops-team
+*.env.example @your-org/devops-team
+
+# Package management
+package.json @your-org/backend-team @your-org/devops-team
+package-lock.json @your-org/backend-team
+Podfile @your-org/ios-team
+Podfile.lock @your-org/ios-team
+build.gradle* @your-org/android-team

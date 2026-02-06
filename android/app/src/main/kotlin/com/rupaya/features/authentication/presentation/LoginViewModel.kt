@@ -9,6 +9,7 @@ import com.rupaya.features.authentication.data.SignupRequest
 import com.rupaya.features.authentication.data.SigninPhoneRequest
 import com.rupaya.features.authentication.data.SignupPhoneRequest
 import com.rupaya.features.authentication.data.PhoneOtpRequest
+import com.rupaya.features.authentication.data.LogoutRequest
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -219,10 +220,21 @@ class LoginViewModel @Inject constructor(
     }
 
     fun logout() {
-        secureStorage.delete("access_token")
-        secureStorage.delete("refresh_token")
-        secureStorage.delete("user_id")
-        _isAuthenticated.value = false
+        viewModelScope.launch {
+            try {
+                val refreshToken = secureStorage.retrieveSecurely("refresh_token")
+                if (!refreshToken.isNullOrBlank()) {
+                    authApi.logout(LogoutRequest(refreshToken = refreshToken))
+                }
+            } catch (e: Exception) {
+                Timber.e(e)
+            } finally {
+                secureStorage.delete("access_token")
+                secureStorage.delete("refresh_token")
+                secureStorage.delete("user_id")
+                _isAuthenticated.value = false
+            }
+        }
     }
 
     private fun validatePasswordStrength(password: String): Boolean {
