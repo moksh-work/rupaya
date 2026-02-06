@@ -1,0 +1,5 @@
+# EKS example
+eks_cluster_name = "rupaya-eks"
+eks_role_arn = "arn:aws:iam::123456789012:role/eks-cluster-role"
+eks_node_role_arn = "arn:aws:iam::123456789012:role/eks-node-role"
+eks_subnet_ids = ["subnet-abc123", "subnet-def456"]

@@ -39,13 +39,13 @@ git push origin main
 # 3. Input: auto_apply=false (for plan-only test)
 
 # Or via CLI:
-gh workflow run terraform-staged-deploy.yml --ref main -f auto_apply=false
+gh workflow run 01-common-terraform-staged-deploy.yml --ref main -f auto_apply=false
 ```
 
 ### Step 3: Monitor
 ```bash
 # List workflow runs
-gh run list -R rsingh/rupaya --workflow=terraform-staged-deploy.yml -L 5
+gh run list -R rsingh/rupaya --workflow=01-common-terraform-staged-deploy.yml -L 5
 
 # Watch specific run
 gh run watch RUN_ID -R rsingh/rupaya
@@ -87,7 +87,7 @@ infra/aws/
 └── ...
 
 .github/workflows/
-└── terraform-staged-deploy.yml        ← CI/CD pipeline (OIDC configured)
+└── 01-common-terraform-staged-deploy.yml        ← CI/CD pipeline (OIDC configured)
 
 Documentation/
 ├── IMPLEMENTATION_SUMMARY.md           ← This deployment overview
@@ -131,7 +131,7 @@ aws cloudtrail lookup-events --lookup-attributes \
 ```
 GitHub Push to Main
         ↓
-Workflow Triggers (terraform-staged-deploy.yml)
+Workflow Triggers (01-common-terraform-staged-deploy.yml)
         ↓
 Stage 1: Deploy Certificates
   ├─ OIDC: Assume AWS role (no secrets!)
@@ -166,7 +166,7 @@ OIDC Provider:       token.actions.githubusercontent.com
 ### GitHub Configuration
 ```
 Repository:          moksh-work/rupaya
-Workflow:            .github/workflows/terraform-staged-deploy.yml
+Workflow:            .github/workflows/01-common-terraform-staged-deploy.yml
 Trigger:             workflow_dispatch (manual) + push to main
 Environments:        certificates (auto), production (approval)
 Secrets:             NONE (uses OIDC)

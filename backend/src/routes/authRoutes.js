@@ -1,6 +1,7 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 const AuthService = require('../services/AuthService');
+const authMiddleware = require('../middleware/authMiddleware');
 const logger = require('../utils/logger');
 
 const router = express.Router();
@@ -189,6 +190,28 @@ router.post('/mfa/verify', [
       accessToken,
       refreshToken
     });
+  } catch (error) {
+    logger.error({ error: error.message });
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Logout
+router.post('/logout', authMiddleware, [
+  body('refreshToken').optional().notEmpty()
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { refreshToken } = req.body || {};
+    if (refreshToken) {
+      await AuthService.revokeRefreshToken(refreshToken);
+    }
+
+    res.json({ message: 'Logged out' });
   } catch (error) {
     logger.error({ error: error.message });
     res.status(400).json({ error: error.message });

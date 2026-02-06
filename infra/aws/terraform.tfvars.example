@@ -12,3 +12,27 @@ db_username = "rupaya"
 redis_node_type = "cache.t4g.micro"
 image_tag = "latest"
 frontend_url = "*"
+# ========== SSL/TLS CERTIFICATE CONFIGURATION ==========
+
+# Domain configuration
+route53_domain = "example.com"
+route53_subdomain = "api"
+
+# Certificate alert email (receives expiration notifications)
+certificate_alert_email = "ops-team@example.com"
+
+# Enable separate HTTPS listener for staging
+# false = both prod and staging use same ALB on port 443 (host-based routing)
+# true = staging uses separate port 8443
+enable_staging_listener = false
+
+# Create Route53 records for additional domains
+create_root_domain_record = false  # example.com
+create_www_record = false          # www.example.com
+
+# SSL/TLS Security Policy
+# Options:
+# - "ELBSecurityPolicy-TLS-1-2-2017-01" (default, TLS 1.2+)
+# - "ELBSecurityPolicy-TLS-1-2-Ext-2018-06" (more ciphers)
+# - "ELBSecurityPolicy-FS-1-2-Res-2019-08" (most secure with forward secrecy)
+ssl_policy = "ELBSecurityPolicy-TLS-1-2-2017-01"

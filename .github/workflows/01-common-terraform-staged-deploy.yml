@@ -1,0 +1,259 @@
+name: 01 - Common - Terraform Infrastructure Deploy
+
+# Workflow: Terraform deployment following Git Flow branching strategy
+# develop → Staging environment
+# release/* → Pre-production testing
+# main → Production environment
+# hotfix/* → Emergency production fixes
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+      - hotfix/*
+      - release/*
+    paths:
+      - 'infra/aws/**'
+      - 'infra/state-management/**'
+      - '.github/workflows/terraform-staged-deploy.yml'
+  pull_request:
+    branches:
+      - develop
+      - main
+    paths:
+      - 'infra/aws/**'
+      - '.github/workflows/terraform-staged-deploy.yml'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment (staging/production)"
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      auto_apply:
+        description: "Auto-apply changes"
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: terraform-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  TF_IN_AUTOMATION: "true"
+  AWS_REGION: "us-east-1"
+  AWS_ACCOUNT_ID: "102503111808"
+  AWS_ROLE_NAME: "rupaya-terraform-cicd"
+  TFSTATE_BUCKET: "rupaya-terraform-state-102503111808"
+  TFSTATE_DYNAMODB_TABLE: "rupaya-terraform-state-lock"
+
+jobs:
+  # Determine deployment environment based on branch
+  setup:
+    name: Setup Environment
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.env.outputs.environment }}
+      auto_apply: ${{ steps.env.outputs.auto_apply }}
+      tfstate_key: ${{ steps.env.outputs.tfstate_key }}
+      should_deploy: ${{ steps.env.outputs.should_deploy }}
+    steps:
+      - name: Determine environment
+        id: env
+        run: |
+          AUTO_APPLY=false
+          SHOULD_DEPLOY=false
+          
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # Manual trigger uses input
+            ENVIRONMENT="${{ inputs.environment }}"
+            AUTO_APPLY="${{ inputs.auto_apply }}"
+            SHOULD_DEPLOY=true
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+            # PR = plan only
+            ENVIRONMENT="staging"
+            AUTO_APPLY=false
+            SHOULD_DEPLOY=false
+          elif [ "${{ github.ref }}" = "refs/heads/develop" ]; then
+            # develop → staging auto-deploy
+            ENVIRONMENT="staging"
+            AUTO_APPLY=true
+            SHOULD_DEPLOY=true
+          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            # main → production auto-deploy
+            ENVIRONMENT="production"
+            AUTO_APPLY=true
+            SHOULD_DEPLOY=true
+          elif [[ "${{ github.ref }}" =~ ^refs/heads/release/ ]]; then
+            # release/* → production manual approval
+            ENVIRONMENT="production"
+            AUTO_APPLY=false
+            SHOULD_DEPLOY=false
+          elif [[ "${{ github.ref }}" =~ ^refs/heads/hotfix/ ]]; then
+            # hotfix/* → production urgent
+            ENVIRONMENT="production"
+            AUTO_APPLY=false
+            SHOULD_DEPLOY=true
+          fi
+          
+          TFSTATE_KEY="${ENVIRONMENT}/infrastructure/terraform.tfstate"
+          
+          echo "environment=${ENVIRONMENT}" >> "$GITHUB_OUTPUT"
+          echo "auto_apply=${AUTO_APPLY}" >> "$GITHUB_OUTPUT"
+          echo "tfstate_key=${TFSTATE_KEY}" >> "$GITHUB_OUTPUT"
+          echo "should_deploy=${SHOULD_DEPLOY}" >> "$GITHUB_OUTPUT"
+          
+          echo "Branch: ${{ github.ref }}"
+          echo "Event: ${{ github.event_name }}"
+          echo "Environment: ${ENVIRONMENT}"
+          echo "Auto Apply: ${AUTO_APPLY}"
+          echo "Should Deploy: ${SHOULD_DEPLOY}"
+
+  certificates:
+    name: Stage 1 - ACM Certificates
+    needs: setup
+    if: needs.setup.outputs.should_deploy == 'true'
+    runs-on: ubuntu-latest
+    environment: ${{ needs.setup.outputs.environment }}
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.6
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/${{ env.AWS_ROLE_NAME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify remote state backend
+        run: |
+          aws s3api head-bucket --bucket "${{ env.TFSTATE_BUCKET }}"
+          aws dynamodb describe-table --table-name "${{ env.TFSTATE_DYNAMODB_TABLE }}" --region "${{ env.AWS_REGION }}"
+
+      - name: Terraform Init
+        working-directory: infra/aws
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ env.TFSTATE_BUCKET }}" \
+            -backend-config="key=${{ needs.setup.outputs.tfstate_key }}" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="dynamodb_table=${{ env.TFSTATE_DYNAMODB_TABLE }}" \
+            -backend-config="encrypt=true"
+
+      - name: Terraform Validate
+        working-directory: infra/aws
+        run: terraform validate
+
+      - name: Terraform Plan (Certificates)
+        working-directory: infra/aws
+        run: terraform plan -target=module.certificates -out=tfplan
+
+      - name: Terraform Apply (Certificates)
+        working-directory: infra/aws
+        run: terraform apply tfplan
+
+      - name: Wait for Certificate Issuance
+        working-directory: infra/aws
+        run: |
+          CERT_ARN=$(terraform output -raw certificate_production_arn 2>/dev/null || echo "")
+          if [ -z "$CERT_ARN" ]; then
+            echo "Certificate ARN not available, skipping validation"
+            exit 0
+          fi
+          
+          echo "Waiting for certificate: $CERT_ARN"
+          for i in {1..30}; do
+            STATUS=$(aws acm describe-certificate --certificate-arn "$CERT_ARN" --region "${{ env.AWS_REGION }}" --query 'Certificate.Status' --output text 2>/dev/null || echo "UNKNOWN")
+            echo "Attempt $i/30: Status = $STATUS"
+            if [ "$STATUS" = "ISSUED" ]; then
+              echo "✓ Certificate is ISSUED"
+              exit 0
+            fi
+            sleep 60
+          done
+          echo "⚠ Certificate still pending (will use in next stage)"
+          exit 0
+
+  infrastructure:
+    name: Stage 2 - Deploy Infrastructure
+    needs: [setup, certificates]
+    if: needs.setup.outputs.should_deploy == 'true'
+    runs-on: ubuntu-latest
+    environment: ${{ needs.setup.outputs.environment }}
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.6
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/${{ env.AWS_ROLE_NAME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify remote state backend
+        run: |
+          aws s3api head-bucket --bucket "${{ env.TFSTATE_BUCKET }}"
+          aws dynamodb describe-table --table-name "${{ env.TFSTATE_DYNAMODB_TABLE }}" --region "${{ env.AWS_REGION }}"
+
+      - name: Terraform Init
+        working-directory: infra/aws
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ env.TFSTATE_BUCKET }}" \
+            -backend-config="key=${{ needs.setup.outputs.tfstate_key }}" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="dynamodb_table=${{ env.TFSTATE_DYNAMODB_TABLE }}" \
+            -backend-config="encrypt=true"
+
+      - name: Terraform Plan
+        working-directory: infra/aws
+        run: terraform plan -out=tfplan
+        env:
+          TF_LOG: INFO
+
+      - name: Show Plan
+        working-directory: infra/aws
+        run: terraform show tfplan
+
+      - name: Terraform Apply
+        if: needs.setup.outputs.auto_apply == 'true' || github.event_name == 'workflow_dispatch'
+        working-directory: infra/aws
+        run: terraform apply tfplan
+
+      - name: Output Infrastructure Details
+        working-directory: infra/aws
+        run: |
+          echo "=== Deployment Summary ==="
+          echo "Environment: ${{ needs.setup.outputs.environment }}"
+          echo "Branch: ${{ github.ref }}"
+          echo "Commit: ${{ github.sha }}"
+          terraform output
+
+      - name: Terraform Plan
+        working-directory: infra/aws
+        run: terraform plan
+
+      - name: Terraform Apply (All)
+        if: ${{ inputs.auto_apply == 'true' }}
+        working-directory: infra/aws
+        run: terraform apply -auto-approve

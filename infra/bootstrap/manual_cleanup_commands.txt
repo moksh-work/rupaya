@@ -1,0 +1,11 @@
+# Manual AWS CLI commands to delete leftover resources
+
+# Delete ECS cluster (must have no running services/tasks)
+aws ecs delete-cluster --cluster rupaya-sandbox-backend-cluster --region us-east-1
+
+# Delete RDS instance (will prompt for final snapshot, add --skip-final-snapshot to force delete)
+aws rds delete-db-instance --db-instance-identifier rupaya-sandbox-db --skip-final-snapshot --region us-east-1
+
+# Delete VPC (must have no attached resources)
+aws ec2 delete-vpc --vpc-id <vpc-xxxxxxxxxxxxxxxxx> --region us-east-1
+# (Get VPC ID from: aws ec2 describe-vpcs --region us-east-1)

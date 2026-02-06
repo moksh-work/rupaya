@@ -1,3 +1,12 @@
+variable "route53_domain" {
+  description = "Root domain for Route53 zone (e.g. example.com)"
+  type        = string
+}
+
+variable "route53_subdomain" {
+  description = "Subdomain for ALB record (e.g. api.example.com)"
+  type        = string
+}
 variable "region" {
   description = "AWS region"
   type        = string
@@ -80,4 +89,64 @@ variable "frontend_url" {
   description = "Allowed CORS origin"
   type        = string
   default     = "*"
+}
+# ========== SSL/TLS CERTIFICATE VARIABLES ==========
+
+variable "certificate_alert_email" {
+  description = "Email address for certificate expiration alerts"
+  type        = string
+  default     = "ops@example.com"
+
+  validation {
+    condition     = can(regex("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$", var.certificate_alert_email))
+    error_message = "Must be a valid email address"
+  }
+}
+
+variable "certificate_validation_timeout" {
+  description = "Timeout for ACM certificate validation (allow DNS propagation)"
+  type        = string
+  default     = "15m"
+}
+
+variable "enable_staging_certificate" {
+  description = "Create staging certificate (set to false if not needed)"
+  type        = bool
+  default     = true
+}
+
+variable "enable_staging_listener" {
+  description = "Enable separate HTTPS listener for staging on port 8443"
+  type        = bool
+  default     = false
+
+  # Set to true if you want staging on separate port, false if both on same ALB
+  # Note: Production and staging both use port 443 with Host-based routing
+}
+
+variable "create_root_domain_record" {
+  description = "Create Route53 record for root domain (example.com)"
+  type        = bool
+  default     = false
+
+  # Set to true if you have a web application on root domain
+}
+
+variable "create_www_record" {
+  description = "Create Route53 record for www subdomain"
+  type        = bool
+  default     = false
+
+  # Set to true if you want www.example.com to point to ALB
+}
+
+variable "ssl_policy" {
+  description = "SSL/TLS policy for ALB listeners"
+  type        = string
+  default     = "ELBSecurityPolicy-TLS-1-2-2017-01"
+
+  # Options:
+  # - ELBSecurityPolicy-TLS-1-2-2017-01: TLS 1.2+ (recommended)
+  # - ELBSecurityPolicy-TLS-1-2-Ext-2018-06: TLS 1.2+ with more ciphers
+  # - ELBSecurityPolicy-FS-1-2-Res-2019-08: TLS 1.2+ with forward secrecy (most secure)
 }

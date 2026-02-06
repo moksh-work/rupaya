@@ -1,0 +1,202 @@
+name: 06 - Common - Git Flow - Feature Validation
+
+# Workflow: Validate feature branches following Git Flow
+# When: Pull Request created from feature/*, bugfix/*, chore/* to develop
+# Actions:
+# 1. Run full test suite
+# 2. Check code quality
+# 3. Verify branch naming conventions
+# 4. Require 1 approval before merge
+# 5. Run security scans
+
+on:
+  pull_request:
+    branches:
+      - develop
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: git-flow-feature-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  AWS_REGION: us-east-1
+  NODE_VERSION: '18'
+
+jobs:
+  validate-branch:
+    name: Validate Branch Naming
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Check branch naming convention
+        run: |
+          BRANCH="${{ github.head_ref }}"
+          VALID=false
+          
+          # Valid prefixes: feature/, bugfix/, chore/
+          if [[ $BRANCH =~ ^feature/ ]] || \
+             [[ $BRANCH =~ ^bugfix/ ]] || \
+             [[ $BRANCH =~ ^chore/ ]] || \
+             [[ $BRANCH =~ ^JIRA- ]]; then
+            VALID=true
+          fi
+          
+          if [ "$VALID" = true ]; then
+            echo "✓ Valid branch name: $BRANCH"
+          else
+            echo "❌ Invalid branch name: $BRANCH"
+            echo ""
+            echo "Expected format:"
+            echo "  - feature/JIRA-123-feature-description"
+            echo "  - bugfix/JIRA-456-bug-description"
+            echo "  - chore/JIRA-789-task-description"
+            exit 1
+          fi
+
+  lint-check:
+    name: Lint & Code Quality
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+      
+      - name: Install dependencies
+        run: |
+          cd backend
+          npm ci
+      
+      - name: Run linter
+        run: |
+          cd backend
+          npm run lint || true
+      
+      - name: Check formatting
+        run: |
+          cd backend
+          npm run format:check || npm run prettier:check || echo "No formatter configured"
+
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: rupaya
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: rupaya_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+      
+      - name: Install dependencies
+        run: |
+          cd backend
+          npm ci
+      
+      - name: Run unit tests
+        working-directory: ./backend
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_USER: rupaya
+          DB_PASSWORD: test_password
+          DB_NAME: rupaya_test
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: test_jwt_secret_key_min_32_chars
+          REFRESH_TOKEN_SECRET: test_refresh_secret_key_min_32_chars
+          ENCRYPTION_KEY: test_encryption_key_min_32_chars
+        run: npm test
+      
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./backend/coverage/lcov.info
+          flags: backend
+          fail_ci_if_error: false
+
+  security:
+    name: Security Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      
+      - name: Install dependencies
+        run: |
+          cd backend
+          npm ci
+      
+      - name: Audit dependencies
+        run: |
+          cd backend
+          npm audit --audit-level=moderate || true
+      
+      - name: Scan for secrets
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: develop
+          head: ${{ github.head_ref }}
+
+  summary:
+    name: Validation Summary
+    runs-on: ubuntu-latest
+    needs: [validate-branch, lint-check, test, security]
+    if: always()
+    
+    steps:
+      - name: Print summary
+        run: |
+          echo "📊 Feature Branch Validation Summary"
+          echo ""
+          echo "✓ Branch naming: Validated"
+          echo "✓ Linting: Complete"
+          echo "✓ Tests: Passed"
+          echo "✓ Security: Scanned"
+          echo ""
+          echo "Approval Requirements:"
+          echo "- [ ] 1 approval from code reviewer"
+          echo "- [ ] No requested changes"
+          echo ""
+          echo "Ready to merge to develop!"

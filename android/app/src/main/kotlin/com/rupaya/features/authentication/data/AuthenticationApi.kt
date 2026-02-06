@@ -24,5 +24,5 @@ interface AuthenticationApi {
     suspend fun requestOtp(@Body request: PhoneOtpRequest): Response<OTPResponse>
 
     @POST("/api/v1/auth/logout")
-    suspend fun logout(): Response<Unit>
+    suspend fun logout(@Body request: LogoutRequest): Response<Unit>
 }

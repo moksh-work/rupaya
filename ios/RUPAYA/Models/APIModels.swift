@@ -37,9 +37,17 @@ struct RefreshTokenRequest: Codable {
     let refreshToken: String
 }
 
+struct LogoutRequest: Codable {
+    let refreshToken: String
+}
+
 struct RefreshTokenResponse: Codable {
     let accessToken: String
     let refreshToken: String
+}
+
+struct LogoutResponse: Codable {
+    let message: String
 }
 
 struct OTPResponse: Codable {
@@ -174,18 +182,22 @@ struct Category: Codable, Identifiable {
 // Removed TransactionsListResponse - API returns array directly
 
 struct DashboardSummary: Codable {
-    let income: Double
-    let expenses: Double
-    let savings: Double
-    let savingsRate: String
-    let spendingByCategory: [CategorySpending]
+    let totalBalance: Double?
+    let income: Double?
+    let expenses: Double?
+    let savings: Double?
+    let savingsRate: Double?
+    let spendingByCategory: [CategorySpending]?
+    let categoryBreakdown: [CategoryBreakdown]?
     
     enum CodingKeys: String, CodingKey {
+        case totalBalance = "total_balance"
         case income
         case expenses
         case savings
-        case savingsRate = "savingsRate"
+        case savingsRate = "savings_rate"
         case spendingByCategory = "spendingByCategory"
+        case categoryBreakdown = "category_breakdown"
     }
 }
 
@@ -196,4 +208,71 @@ struct CategorySpending: Codable, Identifiable {
     
     var categoryName: String? { category }
     var percentage: Double? { nil }
+}
+
+struct CategoryBreakdown: Codable, Identifiable {
+    var id: String { category }
+    let category: String
+    let amount: Double
+    let percentage: Double
+}
+
+struct Budget: Codable, Identifiable {
+    let id: UUID
+    let categoryId: UUID?
+    let limit: Double?
+    let spent: Double?
+    let period: String?
+    let createdAt: Date?
+    
+    var categoryName: String? { nil }
+    
+    enum CodingKeys: String, CodingKey {
+        case id = "budget_id"
+        case categoryId = "category_id"
+        case limit
+        case spent
+        case period
+        case createdAt = "created_at"
+    }
+}
+
+struct Goal: Codable, Identifiable {
+    let id: UUID
+    let goalName: String?
+    let targetAmount: Double?
+    let currentAmount: Double?
+    let targetDate: Date?
+    let createdAt: Date?
+    
+    enum CodingKeys: String, CodingKey {
+        case id = "goal_id"
+        case goalName = "goal_name"
+        case targetAmount = "target_amount"
+        case currentAmount = "current_amount"
+        case targetDate = "target_date"
+        case createdAt = "created_at"
+    }
+}
+
+// Extended models with better property names
+extension Transaction {
+    var transactionId: UUID? { UUID(uuidString: id) }
+    var merchant: String? { nil }
+    var parsedTransactionDate: Date? {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.date(from: transactionDate)
+    }
+}
+
+extension Account {
+    var accountId: UUID? { UUID(uuidString: id) }
+    var accountName: String? { name }
+    var balance: Double { currentBalance }
+}
+
+extension Category {
+    var categoryId: UUID? { UUID(uuidString: id) }
+    var categoryName: String? { name }
 }

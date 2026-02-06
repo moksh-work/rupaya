@@ -2,32 +2,32 @@
 # More info: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
 
 # Global owners - notified on all changes
-* @moksh-work
+* @your-org/platform-team
 
 # Backend code
-backend/ @moksh-work
-backend/src/services/ @moksh-work @moksh-work
-backend/migrations/ @moksh-work
+backend/ @your-org/backend-team
+backend/src/services/ @your-org/backend-team @your-org/security-team
+backend/migrations/ @your-org/database-team
 
 # Frontend code (iOS/Android)
-ios/ @moksh-work
-android/ @moksh-work
+ios/ @your-org/ios-team
+android/ @your-org/android-team
 
 # Infrastructure & DevOps
-infra/ @moksh-work
-infra/aws/ @moksh-work @moksh-work
-infra/gcp/ @moksh-work @moksh-work
-infra/bootstrap/ @moksh-work @moksh-work
+infra/ @your-org/devops-team
+infra/aws/ @your-org/devops-team @your-org/aws-team
+infra/gcp/ @your-org/devops-team @your-org/gcp-team
+infra/bootstrap/ @your-org/devops-team @your-org/security-team
 
 # CI/CD Workflows
-.github/workflows/ @moksh-work
-.github/workflows/01-aws-*.yml @moksh-work @moksh-work
-.github/workflows/01-gcp-*.yml @moksh-work @moksh-work
+.github/workflows/ @your-org/devops-team
+.github/workflows/01-aws-*.yml @your-org/devops-team @your-org/aws-team
+.github/workflows/01-gcp-*.yml @your-org/devops-team @your-org/gcp-team
 
 # Documentation
-docs/ @moksh-work
-*.md @moksh-work
-README.md @moksh-work @moksh-work
+docs/ @your-org/platform-team
+*.md @your-org/platform-team
+README.md @your-org/platform-team @your-org/devops-team
 
 # Security-sensitive files
 **/security/ @your-org/security-team

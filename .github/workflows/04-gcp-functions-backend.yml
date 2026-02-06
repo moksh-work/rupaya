@@ -1,0 +1,82 @@
+name: 04 - GCP - Build and Deploy Backend to Cloud Functions
+
+# This workflow builds, tests, and deploys the backend to Google Cloud Functions using industry best practices.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+      REGION: us-central1 # Change as needed
+      FUNCTION_NAME: rupaya-backend-fn
+      ENTRY_POINT: app # Update as needed
+      RUNTIME: nodejs20 # Update as needed
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Cache npm dependencies
+        uses: actions/cache@v4
+        with:
+          path: backend/node_modules
+          key: ${{ runner.os }}-npm-${{ hashFiles('backend/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
+
+      - name: Install backend dependencies
+        run: |
+          cd backend
+          npm ci
+
+      - name: Run backend tests
+        run: |
+          cd backend
+          npm test
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: Authenticate to Google Cloud (OIDC)
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
+
+      - name: Deploy to Cloud Functions
+        run: |
+          gcloud functions deploy $FUNCTION_NAME \
+            --region $REGION \
+            --runtime $RUNTIME \
+            --trigger-http \
+            --entry-point $ENTRY_POINT \
+            --source ./backend \
+            --allow-unauthenticated
+
+      - name: Notify
+        run: echo "Deployed to Cloud Functions: $FUNCTION_NAME"
+
+      - name: Upload build logs (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-build-logs
+          path: backend
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "Build or deploy failed. Please check the logs."

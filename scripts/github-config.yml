@@ -1,0 +1,208 @@
+# GitHub Enterprise Security Configuration
+# This file defines all security policies for the Rupaya repository
+
+repository:
+  owner: "moksh-work"  # Replace with your GitHub organization
+  name: "rupaya"
+  
+branch_protection:
+  main:
+    required_pull_request_reviews:
+      required_approving_review_count: 1
+      dismiss_stale_reviews: true
+      require_code_owner_reviews: true
+      require_last_push_approval: true
+    required_status_checks:
+      strict: true
+      contexts:
+        - lint-and-quality
+        - backend-tests
+        - security-scan
+        - build-check
+        - branch-validation
+    required_conversation_resolution:
+      enabled: true
+    required_signatures:
+      enabled: true
+    enforce_admins:
+      enabled: true
+    allow_force_pushes:
+      enabled: false
+    allow_deletions:
+      enabled: false
+    restrictions:
+      users: []
+      teams: ["devops-team", "ops-team"]
+      apps: []
+
+  develop:
+    required_pull_request_reviews:
+      required_approving_review_count: 1
+      dismiss_stale_reviews: true
+      require_code_owner_reviews: true
+      require_last_push_approval: false
+    required_status_checks:
+      strict: true
+      contexts:
+        - lint-and-quality
+        - backend-tests
+        - security-scan
+        - build-check
+        - branch-validation
+    required_conversation_resolution:
+      enabled: true
+    required_signatures:
+      enabled: false
+    enforce_admins:
+      enabled: true
+    allow_force_pushes:
+      enabled: false
+    allow_deletions:
+      enabled: false
+
+  release_pattern:
+    pattern: "release/*"
+    required_pull_request_reviews:
+      required_approving_review_count: 1
+      dismiss_stale_reviews: true
+      require_code_owner_reviews: false
+    required_status_checks:
+      strict: true
+      contexts:
+        - lint-and-quality
+        - backend-tests
+        - security-scan
+        - build-check
+    enforce_admins:
+      enabled: false
+
+  hotfix_pattern:
+    pattern: "hotfix/*"
+    required_pull_request_reviews:
+      required_approving_review_count: 1
+      dismiss_stale_reviews: true
+    required_status_checks:
+      strict: true
+      contexts:
+        - lint-and-quality
+        - security-scan
+    enforce_admins:
+      enabled: false
+
+environments:
+  staging:
+    wait_timer: 0
+    reviewers:
+      - type: User
+        name: "staging-approver"  # Replace with actual username
+    deployment_branch_policy:
+      protected_branches: true
+      custom_branch_policies: false
+    
+  production:
+    wait_timer: 300  # 5 minutes wait time
+    reviewers:
+      - type: Team
+        name: "platform-team"  # Replace with actual team name
+      - type: Team
+        name: "security-team"
+    deployment_branch_policy:
+      protected_branches: true
+      custom_branch_policies: false
+    prevent_self_review: true
+
+codeowners:
+  enabled: true
+  patterns:
+    - pattern: "*"
+      owners: ["@your-org/platform-team"]
+    - pattern: "backend/"
+      owners: ["@your-org/backend-team"]
+    - pattern: "backend/migrations/"
+      owners: ["@your-org/database-team"]
+    - pattern: "infra/"
+      owners: ["@your-org/devops-team"]
+    - pattern: ".github/workflows/"
+      owners: ["@your-org/devops-team"]
+    - pattern: "docs/"
+      owners: ["@your-org/platform-team"]
+    - pattern: "*.md"
+      owners: ["@your-org/platform-team"]
+    - pattern: "**/security/"
+      owners: ["@your-org/security-team"]
+    - pattern: "*.tf"
+      owners: ["@your-org/security-team", "@your-org/devops-team"]
+    - pattern: ".github/workflows/01-aws-*.yml"
+      owners: ["@your-org/devops-team", "@your-org/aws-team"]
+    - pattern: ".github/workflows/01-gcp-*.yml"
+      owners: ["@your-org/devops-team", "@your-org/gcp-team"]
+
+secrets:
+  # These will be prompted for during script execution
+  # Never commit actual secret values
+  required:
+    - name: AWS_OIDC_ROLE_STAGING
+      description: "ARN of the GitHub Actions IAM role for staging"
+      example: "arn:aws:iam::123456789012:role/GitHubActionsRoleStaging"
+      source: "env"  # Can be 'env', 'prompt', or 'file'
+      
+    - name: AWS_OIDC_ROLE_PROD
+      description: "ARN of the GitHub Actions IAM role for production"
+      example: "arn:aws:iam::123456789012:role/GitHubActionsRoleProd"
+      source: "env"
+      
+    - name: SLACK_WEBHOOK_URL
+      description: "Slack webhook URL for notifications"
+      example: "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+      source: "prompt"
+      
+    - name: GCP_WORKLOAD_IDENTITY_PROVIDER
+      description: "GCP Workload Identity Provider for OIDC"
+      example: "projects/123456789/locations/global/workloadIdentityPools/github-pool/providers/github-provider"
+      source: "env"
+      optional: true
+      
+    - name: GCP_SERVICE_ACCOUNT
+      description: "GCP Service Account email for GitHub Actions"
+      example: "github-actions@project-id.iam.gserviceaccount.com"
+      source: "env"
+      optional: true
+
+security_policies:
+  # Enterprise security requirements
+  require_2fa: true
+  require_signed_commits: true
+  require_linear_history: false
+  allow_squash_merge: true
+  allow_merge_commit: false
+  allow_rebase_merge: false
+  delete_branch_on_merge: true
+  
+  # Security scanning
+  enable_secret_scanning: true
+  enable_secret_scanning_push_protection: true
+  enable_dependabot_alerts: true
+  enable_dependabot_security_updates: true
+  enable_vulnerability_alerts: true
+  
+  # Code scanning
+  enable_code_scanning: true
+  code_scanning_default_setup: true
+
+compliance:
+  # Compliance frameworks
+  frameworks:
+    - SOC2
+    - PCI-DSS
+  
+  # Audit requirements
+  audit_log_retention_days: 90
+  require_audit_trail: true
+  
+  # Access control
+  minimum_reviewers: 2  # For production deployments
+  separation_of_duties: true
+  
+  # Documentation
+  require_issue_reference: false
+  require_changelog_update: false
