@@ -1,16 +1,13 @@
 name: 03 - AWS - Deploy to Production
 
-# Workflow: Deploy backend to production ECS following Git Flow
+# Workflow: Deploy backend to production ECS (trunk-based)
 # main → Auto-deploy to production
-# hotfix/* → Emergency production deployment with urgent priority
-# release/* → (Manual approval required, uses main deployment)
 # Tags: v*.*.* → Tag-based production releases
 
 on:
   push:
     branches:
       - main
-      - hotfix/*
     tags:
       - 'v*.*.*'
     paths:

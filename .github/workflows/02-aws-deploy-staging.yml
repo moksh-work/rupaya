@@ -1,25 +1,8 @@
 name: 02 - AWS - Deploy to Staging Environment
 
-# Workflow: Deploy backend to ECS following Git Flow branching
-# develop → Auto-deploy to staging
-# release/* → Manual approval for staging
-# pull_request → Comment with deployment link (optional)
+# Workflow: Deploy backend to ECS (manual staging)
 
 on:
-  push:
-    branches:
-      - develop
-      - release/*
-    paths:
-      - 'backend/**'
-      - 'infra/aws/**'
-      - '.github/workflows/deploy-staging.yml'
-      - '.github/workflows/backend.yml'
-  pull_request:
-    branches:
-      - develop
-    paths:
-      - 'backend/**'
   workflow_dispatch:
     inputs:
       environment:

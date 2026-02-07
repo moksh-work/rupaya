@@ -1,20 +1,17 @@
 name: 02 - Common - Backend CI/CD Pipeline
 
-# Workflow: Backend testing and deployment following Git Flow branching
-# feature/* → Run tests only (no deployment)
-# develop → Auto-deploy to staging
-# release/* → Manual approval for staging final test
+# Workflow: Backend testing and deployment following trunk-based flow
+# PR → Run tests only (no deployment)
 # main → Auto-deploy to production
-# hotfix/* → Emergency production deployment
 
 on:
   pull_request:
-    branches: [develop, main]
+    branches: [main]
     paths:
       - 'backend/**'
       - '.github/workflows/backend.yml'
   push:
-    branches: [develop, main, release/*, hotfix/*]
+    branches: [main]
     paths:
       - 'backend/**'
       - '.github/workflows/backend.yml'

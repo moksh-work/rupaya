@@ -4,21 +4,12 @@ on:
   push:
     branches:
       - main
-      - develop
-      - release/*
-      - hotfix/*
-      - feature/*
-      - bugfix/*
-      - chore/*
     paths:
       - 'backend/**'
       - 'shared/**'
   pull_request:
     branches:
       - main
-      - develop
-      - release/*
-      - hotfix/*
     paths:
       - 'backend/**'
       - 'shared/**'

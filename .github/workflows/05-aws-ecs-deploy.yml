@@ -3,7 +3,6 @@ name: 05 - AWS - ECS Deploy - Staging & Production
 on:
   push:
     branches:
-      - develop    # Auto-deploy to staging on develop push
       - main       # Auto-deploy to production on main push
     paths:
       - 'backend/**'

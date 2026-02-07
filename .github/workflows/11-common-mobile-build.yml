@@ -2,13 +2,13 @@ name: 11 - Common - Mobile Build Check
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main ]
     paths:
       - 'ios/**'
       - 'android/**'
       - 'shared/**'
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main ]
     paths:
       - 'ios/**'
       - 'android/**'

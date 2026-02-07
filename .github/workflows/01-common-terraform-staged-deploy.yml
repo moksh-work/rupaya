@@ -1,29 +1,24 @@
 name: 01 - Common - Terraform Infrastructure Deploy
 
-# Workflow: Terraform deployment following Git Flow branching strategy
-# develop → Staging environment
-# release/* → Pre-production testing
+# Workflow: Terraform deployment following trunk-based strategy
+# PR → Plan only
 # main → Production environment
-# hotfix/* → Emergency production fixes
+# workflow_dispatch → Manual staging/production
 
 on:
   push:
     branches:
-      - develop
       - main
-      - hotfix/*
-      - release/*
     paths:
       - 'infra/aws/**'
       - 'infra/state-management/**'
-      - '.github/workflows/terraform-staged-deploy.yml'
+      - '.github/workflows/01-common-terraform-staged-deploy.yml'
   pull_request:
     branches:
-      - develop
       - main
     paths:
       - 'infra/aws/**'
-      - '.github/workflows/terraform-staged-deploy.yml'
+      - '.github/workflows/01-common-terraform-staged-deploy.yml'
   workflow_dispatch:
     inputs:
       environment:
@@ -78,25 +73,10 @@ jobs:
             ENVIRONMENT="staging"
             AUTO_APPLY=false
             SHOULD_DEPLOY=false
-          elif [ "${{ github.ref }}" = "refs/heads/develop" ]; then
-            # develop → staging auto-deploy
-            ENVIRONMENT="staging"
-            AUTO_APPLY=true
-            SHOULD_DEPLOY=true
           elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
             # main → production auto-deploy
             ENVIRONMENT="production"
             AUTO_APPLY=true
-            SHOULD_DEPLOY=true
-          elif [[ "${{ github.ref }}" =~ ^refs/heads/release/ ]]; then
-            # release/* → production manual approval
-            ENVIRONMENT="production"
-            AUTO_APPLY=false
-            SHOULD_DEPLOY=false
-          elif [[ "${{ github.ref }}" =~ ^refs/heads/hotfix/ ]]; then
-            # hotfix/* → production urgent
-            ENVIRONMENT="production"
-            AUTO_APPLY=false
             SHOULD_DEPLOY=true
           fi
           

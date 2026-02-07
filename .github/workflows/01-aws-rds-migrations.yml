@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - develop
     paths:
       - 'backend/migrations/**'
       - '.github/workflows/aws-rds-migrations.yml'
@@ -47,7 +46,7 @@ jobs:
 
   migrate-staging:
     needs: validate-migrations
-    if: github.ref == 'refs/heads/develop' || github.event.inputs.environment == 'staging'
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging'
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -137,8 +136,8 @@ jobs:
             --db-snapshot-identifier rupaya-staging-pre-prod-migration-${{ github.sha }}
 
   migrate-production:
-    needs: migrate-staging
-    if: github.ref == 'refs/heads/main' || github.event.inputs.environment == 'production'
+    needs: validate-migrations
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production')
     runs-on: ubuntu-latest
     permissions:
       id-token: write
