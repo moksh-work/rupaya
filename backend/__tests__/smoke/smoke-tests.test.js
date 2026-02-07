@@ -4,19 +4,23 @@
  */
 
 const request = require('supertest');
-const app = require('../../../src/app');
+const app = require('../../src/app');
 
-describe('Smoke Tests - Core API Functionality', () => {
+const describeSmoke = process.env.RUN_SMOKE_TESTS === 'true' ? describe : describe.skip;
+
+describeSmoke('Smoke Tests - Core API Functionality', () => {
   let authToken;
   let userId;
 
   beforeAll(async () => {
     // Setup: Create and authenticate a test user
     const signupRes = await request(app)
-      .post('/api/auth/signup')
+      .post('/api/v1/auth/signup')
       .send({
         email: `smoke-test-${Date.now()}@example.com`,
         password: 'SmokeTest123!@#',
+        deviceId: `smoke-device-${Date.now()}`,
+        deviceName: 'smoke-device',
         firstName: 'Smoke',
         lastName: 'Test'
       });

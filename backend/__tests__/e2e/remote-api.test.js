@@ -3,6 +3,7 @@ const http = require('http');
 const { randomBytes } = require('crypto');
 
 const API_BASE_URL = process.env.API_BASE_URL || 'https://staging-api.cloudycs.com';
+const shouldRunRemote = process.env.RUN_REMOTE_TESTS === 'true';
 
 const requestJson = ({ method, path, token, body }) => {
   return new Promise((resolve, reject) => {
@@ -75,7 +76,9 @@ const createStrongPassword = () => {
 const deviceId = `ci-device-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 const deviceName = 'ci-device';
 
-describe('Remote API Smoke Tests', () => {
+const describeRemote = shouldRunRemote ? describe : describe.skip;
+
+describeRemote('Remote API Smoke Tests', () => {
   let accessToken;
   let refreshToken;
   let accountId;

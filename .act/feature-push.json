@@ -1,0 +1,10 @@
+{
+  "ref": "refs/heads/feature/test-1",
+  "repository": {
+    "full_name": "moksh-work/rupaya"
+  },
+  "head_commit": {
+    "id": "local",
+    "message": "local act run"
+  }
+}

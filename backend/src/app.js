@@ -28,19 +28,23 @@ app.disable('x-powered-by');
 app.set('trust proxy', 1);
 app.use(securityHeaders);
 
-// Rate Limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP, please try again later.'
-});
+// Rate Limiting (skip in tests)
+const limiter = process.env.NODE_ENV === 'test'
+  ? (req, res, next) => next()
+  : rateLimit({
+      windowMs: 15 * 60 * 1000, // 15 minutes
+      max: 100, // limit each IP to 100 requests per windowMs
+      message: 'Too many requests from this IP, please try again later.'
+    });
 
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 5, // 5 login attempts per 15 minutes
-  skipSuccessfulRequests: true,
-  message: 'Too many login attempts, please try again later.'
-});
+const authLimiter = process.env.NODE_ENV === 'test'
+  ? (req, res, next) => next()
+  : rateLimit({
+      windowMs: 15 * 60 * 1000,
+      max: 5, // 5 login attempts per 15 minutes
+      skipSuccessfulRequests: true,
+      message: 'Too many login attempts, please try again later.'
+    });
 
 app.use(limiter);
 
@@ -73,6 +77,23 @@ app.use('/api/v1/banks', authMiddleware, bankRoutes);
 app.use('/api/v1/investments', authMiddleware, investmentRoutes);
 app.use('/api/v1/notifications', authMiddleware, notificationRoutes);
 app.use('/api/v1/settings', authMiddleware, settingsRoutes);
+
+// Backward-compatible /api routes
+app.use('/api/auth', authLimiter, authRoutes);
+app.use('/api/transactions', authMiddleware, transactionRoutes);
+app.use('/api/analytics', authMiddleware, analyticsRoutes);
+app.use('/api/accounts', authMiddleware, accountRoutes);
+app.use('/api/categories', authMiddleware, categoryRoutes);
+app.use('/api/users', authMiddleware, userRoutes);
+app.use('/api/user', authMiddleware, userRoutes);
+app.use('/api/expenses', authMiddleware, expenseRoutes);
+app.use('/api/income', authMiddleware, incomeRoutes);
+app.use('/api/budgets', authMiddleware, budgetRoutes);
+app.use('/api/reports', authMiddleware, reportRoutes);
+app.use('/api/banks', authMiddleware, bankRoutes);
+app.use('/api/investments', authMiddleware, investmentRoutes);
+app.use('/api/notifications', authMiddleware, notificationRoutes);
+app.use('/api/settings', authMiddleware, settingsRoutes);
 
 // Health Check
 app.get('/health', (req, res) => {
@@ -172,9 +193,13 @@ app.get('/admin/cleanup-metrics', (req, res) => {
   });
 });
 
-// Run cleanup immediately on startup
-runRevokedTokenCleanup();
-// Schedule recurring cleanup every 24 hours
-setInterval(runRevokedTokenCleanup, revokedTokenCleanupIntervalMs);
+const shouldRunCleanup = process.env.NODE_ENV !== 'test' && process.env.DISABLE_TOKEN_CLEANUP !== 'true';
+
+if (shouldRunCleanup) {
+  // Run cleanup immediately on startup
+  runRevokedTokenCleanup();
+  // Schedule recurring cleanup every 24 hours
+  setInterval(runRevokedTokenCleanup, revokedTokenCleanupIntervalMs);
+}
 
 module.exports = app;

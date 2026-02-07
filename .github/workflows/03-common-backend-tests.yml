@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - feature/*
     paths:
       - 'backend/**'
       - 'shared/**'
@@ -69,23 +70,15 @@ jobs:
       - name: Run tests
         env:
           NODE_ENV: test
-          DB_HOST: localhost
-          DB_PORT: 5432
-          DB_USER: rupaya_test
-          DB_PASSWORD: test_password
-          DB_NAME: rupaya_test
-          REDIS_HOST: localhost
-          REDIS_PORT: 6379
+          DATABASE_URL: postgres://test_user:test_password@127.0.0.1:5432/rupaya_test
+          REDIS_URL: redis://localhost:6379
           JWT_SECRET: test_secret_min_32_chars_long
-          JWT_REFRESH_SECRET: test_refresh_min_32_chars_long
+          REFRESH_TOKEN_SECRET: test_refresh_min_32_chars_long
+          RUN_REMOTE_TESTS: "false"
+          DISABLE_TOKEN_CLEANUP: "true"
         run: |
           cd backend
-          npm test
-      
-      - name: Generate coverage report
-        run: |
-          cd backend
-          npm run test:coverage
+          npm test -- --coverage
       
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3

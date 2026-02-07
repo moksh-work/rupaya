@@ -40,11 +40,12 @@ jobs:
           aws ssm send-command \
             --instance-ids $EC2_INSTANCE_ID \
             --document-name "AWS-RunShellScript" \
-            --parameters commands=["docker pull $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG","docker stop rupaya-backend || true","docker rm rupaya-backend || true","docker run -d --name rupaya-backend -p 80:3000 $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"] \
+            --parameters 'commands=["docker pull '$ECR_REGISTRY'/'$ECR_REPOSITORY':'$IMAGE_TAG'","docker stop rupaya-backend || true","docker rm rupaya-backend || true","docker run -d --name rupaya-backend -p 80:3000 '$ECR_REGISTRY'/'$ECR_REPOSITORY':'$IMAGE_TAG'"]' \
             --region $AWS_REGION
 
       - name: Notify
-        run: echo "Deployed to EC2 instance: $EC2_INSTANCE_ID"
+        run: |
+          echo "Deployed to EC2 instance: $EC2_INSTANCE_ID"
 
       - name: Notify on failure
         if: failure()

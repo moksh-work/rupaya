@@ -42,7 +42,8 @@ jobs:
           kubectl rollout status deployment/rupaya-backend -n $NAMESPACE
 
       - name: Notify
-        run: echo "Deployed to EKS: deployment/rupaya-backend"
+        run: |
+          echo "Deployed to EKS: deployment/rupaya-backend"
 
       - name: Notify on failure
         if: failure()

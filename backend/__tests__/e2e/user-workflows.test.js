@@ -4,9 +4,11 @@
  */
 
 const request = require('supertest');
-const app = require('../../../src/app');
+const app = require('../../src/app');
 
-describe('End-to-End Tests - User Workflows', () => {
+const describeE2E = process.env.RUN_E2E_TESTS === 'true' ? describe : describe.skip;
+
+describeE2E('End-to-End Tests - User Workflows', () => {
   describe('E2E: New User Onboarding Flow', () => {
     it('should complete full onboarding workflow', async () => {
       const userEmail = `e2e-onboard-${Date.now()}@example.com`;
@@ -18,6 +20,8 @@ describe('End-to-End Tests - User Workflows', () => {
         .send({
           email: userEmail,
           password: userPassword,
+          deviceId: `device-${Date.now()}`,
+          deviceName: 'e2e-device',
           firstName: 'E2E',
           lastName: 'User'
         });

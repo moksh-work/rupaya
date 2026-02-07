@@ -43,7 +43,8 @@ jobs:
             --region $AWS_REGION
 
       - name: Notify
-        run: echo "Deployed to Lambda: $LAMBDA_FUNCTION_NAME"
+        run: |
+          echo "Deployed to Lambda: $LAMBDA_FUNCTION_NAME"
 
       - name: Notify on failure
         if: failure()

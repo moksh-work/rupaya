@@ -23,15 +23,17 @@ router.post('/signup', [
 
     const result = await AuthService.signup(email, password, deviceId, deviceName);
 
-    res.json({
+    res.status(201).json({
       userId: result.userId,
       accessToken: result.accessToken,
       refreshToken: result.refreshToken,
+      token: result.accessToken,
       user: result.user
     });
   } catch (error) {
     logger.error({ error: error.message });
-    res.status(400).json({ error: error.message });
+    const status = error.message && error.message.toLowerCase().includes('already exists') ? 409 : 400;
+    res.status(status).json({ error: error.message });
   }
 });
 
@@ -79,11 +81,7 @@ router.post('/signup-phone', [
 });
 
 // Signin
-router.post('/signin', [
-  body('email').isEmail().normalizeEmail(),
-  body('password').notEmpty(),
-  body('deviceId').notEmpty()
-], async (req, res) => {
+const signinHandler = async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -94,12 +92,28 @@ router.post('/signin', [
 
     const result = await AuthService.signin(email, password, deviceId);
 
-    res.json(result);
+    res.json({
+      ...result,
+      token: result.accessToken
+    });
   } catch (error) {
     logger.error({ error: error.message });
     res.status(401).json({ error: error.message });
   }
-});
+};
+
+router.post('/signin', [
+  body('email').isEmail().normalizeEmail(),
+  body('password').notEmpty(),
+  body('deviceId').notEmpty()
+], signinHandler);
+
+// Backward-compatible login alias
+router.post('/login', [
+  body('email').isEmail().normalizeEmail(),
+  body('password').notEmpty(),
+  body('deviceId').notEmpty()
+], signinHandler);
 
 // Signin with phone + OTP
 router.post('/signin-phone', [
