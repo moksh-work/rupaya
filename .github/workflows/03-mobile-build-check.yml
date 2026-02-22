@@ -46,16 +46,7 @@ jobs:
       - name: Build iOS app
         run: |
           cd ios
-          xcodebuild build \
-            -workspace RUPAYA.xcworkspace \
-            -scheme RUPAYA \
-            -configuration Debug \
-            -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath build \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            ONLY_ACTIVE_ARCH=YES
+          /Users/rsingh/.local/share/gem/ruby/4.0.0/bin/fastlane build_debug
       
       # Note: iOS tests skipped due to GitHub Actions environment limitations
       # Run locally with: xcodebuild test

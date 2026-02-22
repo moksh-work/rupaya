@@ -1,0 +1,10 @@
+# Fastlane Appfile
+# Identifies the app for fastlane actions
+
+app_identifier "com.rupaya.app"
+apple_id ENV["APPLE_ID"] || "your-apple-id@example.com"
+team_id ENV["APPLE_TEAM_ID"] || "YOUR_TEAM_ID"
+
+# You can uncomment the lines below and add your own
+# team_name("ProductionTeam")
+# itc_team_id("123456789")

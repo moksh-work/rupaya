@@ -1,0 +1,113 @@
+default_platform(:ios)
+
+platform :ios do
+  # Build for iOS Simulator (Debug)
+  # Usage: fastlane ios build_debug
+  lane :build_debug do
+    setup_ci if is_ci
+
+    build_app(
+      workspace: "RUPAYA.xcworkspace",
+      scheme: "RUPAYA",
+      configuration: "Debug",
+      destination: "generic/platform=iOS Simulator",
+      build_for_testing: false,
+      skip_package_ipa: true,
+      skip_signing: true,
+      derived_data_path: "build",
+      verbose: true
+    )
+
+    UI.success "✅ iOS Debug build succeeded!"
+  end
+
+  # Run Unit Tests
+  # Usage: fastlane ios test_debug
+  lane :test_debug do
+    setup_ci if is_ci
+
+    build_app(
+      workspace: "RUPAYA.xcworkspace",
+      scheme: "RUPAYA",
+      configuration: "Debug",
+      destination: "generic/platform=iOS Simulator",
+      build_for_testing: true,
+      skip_signing: true,
+      derived_data_path: "build",
+      verbose: true
+    )
+
+    UI.success "✅ iOS Test build succeeded!"
+  end
+
+  # Build for Release (Archive)
+  # Usage: fastlane ios build_release
+  lane :build_release do
+    setup_ci if is_ci
+
+    build_app(
+      workspace: "RUPAYA.xcworkspace",
+      scheme: "RUPAYA",
+      configuration: "Release",
+      sdk: "iphoneos",
+      archive_path: "build/RUPAYA.xcarchive",
+      skip_signing: false,
+      skip_package_ipa: false,
+      export_options: {
+        method: "app-store",
+        provisioningProfileSpecifier: ENV["PROVISIONING_PROFILE"] || "RUPAYA AppStore",
+        signingStyle: "automatic",
+        stripSwiftSymbols: true,
+        thinning: "<none>"
+      },
+      verbose: true
+    )
+
+    UI.success "✅ iOS Release build succeeded!"
+  end
+
+  # Export IPA to TestFlight
+  # Usage: fastlane ios upload_testflight
+  lane :upload_testflight do
+    setup_ci if is_ci
+
+    api_key = app_store_connect_api_key(
+      key_id: ENV["APP_STORE_KEY_ID"],
+      issuer_id: ENV["APP_STORE_ISSUER_ID"],
+      key_content: ENV["APP_STORE_API_KEY_CONTENT"],
+      is_key_content_base64: true,
+      in_house: false
+    )
+
+    upload_to_testflight(
+      api_key: api_key,
+      ipa: "build/RUPAYA.ipa",
+      skip_waiting_for_build_processing: true,
+      demoter_of_build: true,
+      demo_account_required: false,
+      notify_external_testers: false,
+      verbose: true
+    )
+
+    UI.success "✅ Successfully uploaded to TestFlight!"
+  end
+
+  # Complete CI/CD lane
+  # Usage: fastlane ios ci_build
+  lane :ci_build do
+    setup_ci if is_ci
+
+    # Install dependencies
+    sh("cd .. && bundle install") if File.exist?("../Gemfile")
+
+    # Build for simulator
+    build_debug
+
+    UI.success "✅ iOS CI build pipeline completed!"
+  end
+
+  # Error handler
+  error do |lane, exception|
+    UI.error "❌ fastlane error in #{lane}: #{exception}"
+  end
+end
