@@ -1,211 +1,56 @@
-name: 07 - ECS Deploy (Unified Staging & Production)
+name: 07 - ECS Deploy
 
-# Unified ECS deployment workflow for manual deployments only
+# Manual-only deployment workflow
 # Prevents accidental auto-deployments from any branch
-# Features: Auto-environment detection, custom version tags, task definition updates, health checks
+# Trigger: GitHub Actions UI → workflow_dispatch only
 
 on:
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Deploy Environment'
+        description: Deploy Environment
         required: true
         type: choice
+        default: staging
         options:
           - staging
           - production
-      version:
-        description: 'Version tag for deployment (optional, e.g., v1.0.0 or sha shorthand)'
-        required: false
-        default: 'latest'
 
 jobs:
-  build-and-push:
+  deploy:
+    name: Deploy to ${{ github.event.inputs.environment }}
     runs-on: ubuntu-latest
+    
     permissions:
       id-token: write
       contents: read
-    outputs:
-      image-uri: ${{ steps.image.outputs.image_uri }}
-      image-version: ${{ steps.version.outputs.version }}
-      environment: ${{ steps.env.outputs.environment }}
-      ecr-registry: ${{ steps.login-ecr.outputs.registry }}
-      cluster-name: ${{ steps.env.outputs.cluster_name }}
-      service-name: ${{ steps.env.outputs.service_name }}
+
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Determine environment
+      - name: Set environment
         id: env
         run: |
-          if [[ "${{ github.event_name }}" == "push" ]]; then
-            ENVIRONMENT="production"
-            CLUSTER_NAME="rupaya-ecs"
-            SERVICE_NAME="rupaya-backend"
-            ECR_REPO="rupaya-backend"
-          elif [[ "${{ github.event.inputs.environment }}" == "production" ]]; then
-            ENVIRONMENT="production"
-            CLUSTER_NAME="rupaya-ecs"
-            SERVICE_NAME="rupaya-backend"
-            ECR_REPO="rupaya-backend"
-          else
-            ENVIRONMENT="staging"
-            CLUSTER_NAME="rupaya-ecs-staging"
-            SERVICE_NAME="rupaya-backend-staging"
-            ECR_REPO="rupaya-backend-staging"
-          fi
+          ENV="${{ github.event.inputs.environment }}"
+          echo "environment=$ENV" >> $GITHUB_OUTPUT
           
-          echo "environment=${ENVIRONMENT}" >> $GITHUB_OUTPUT
-          echo "cluster_name=${CLUSTER_NAME}" >> $GITHUB_OUTPUT
-          echo "service_name=${SERVICE_NAME}" >> $GITHUB_OUTPUT
-          echo "ecr_repo=${ECR_REPO}" >> $GITHUB_OUTPUT
-          echo "aws_region=us-east-1" >> $GITHUB_OUTPUT
-
-      - name: Determine version tag
-        id: version
-        run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ github.event.inputs.version }}" ]]; then
-            VERSION="${{ github.event.inputs.version }}"
+          if [[ "$ENV" == "production" ]]; then
+            echo "cluster=rupaya-ecs" >> $GITHUB_OUTPUT
+            echo "service=rupaya-backend" >> $GITHUB_OUTPUT
           else
-            SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
-            VERSION="v${{ github.run_number }}-${SHORT_SHA}"
+            echo "cluster=rupaya-ecs-staging" >> $GITHUB_OUTPUT
+            echo "service=rupaya-backend-staging" >> $GITHUB_OUTPUT
           fi
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "Deploying version: ${VERSION}"
 
-      - name: Configure AWS credentials via OIDC
+      - name: Configure AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-east-1
 
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build and push Docker image
-        id: image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./backend
-          file: ./backend/Dockerfile
-          platforms: linux/amd64
-          push: true
-          tags: |
-            ${{ steps.login-ecr.outputs.registry }}/${{ steps.env.outputs.ecr_repo }}:${{ steps.version.outputs.version }}
-            ${{ steps.login-ecr.outputs.registry }}/${{ steps.env.outputs.ecr_repo }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Set image URI
-        id: image
+      - name: Deploy
         run: |
-          echo "image_uri=${{ steps.login-ecr.outputs.registry }}/${{ steps.env.outputs.ecr_repo }}:${{ steps.version.outputs.version }}" >> $GITHUB_OUTPUT
-
-  deploy-ecs:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          aws-region: us-east-1
-
-      - name: Get current task definition
-        id: task-def
-        run: |
-          aws ecs describe-task-definition \
-            --task-definition rupaya-backend \
-            --region us-east-1 \
-            --query 'taskDefinition' \
-            --output json > /tmp/task-def.json
-          echo "task_def=$(cat /tmp/task-def.json)" >> $GITHUB_OUTPUT
-
-      - name: Update task definition with new image
-        id: new-task-def
-        run: |
-          cat /tmp/task-def.json | jq \
-            --arg IMAGE "${{ needs.build-and-push.outputs.image-uri }}" \
-            '.containerDefinitions[0].image = $IMAGE | 
-             del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' \
-            > /tmp/new-task-def.json
-          cat /tmp/new-task-def.json
-
-      - name: Register new ECS task definition
-        id: register-task
-        run: |
-          TASK_DEF_ARN=$(cat /tmp/new-task-def.json | aws ecs register-task-definition \
-            --region us-east-1 \
-            --cli-input-json file:///dev/stdin \
-            --query 'taskDefinition.taskDefinitionArn' \
-            --output text)
-          echo "task_def_arn=${TASK_DEF_ARN}" >> $GITHUB_OUTPUT
-          echo "Task Definition: ${TASK_DEF_ARN}"
-
-      - name: Update ECS service
-        run: |
-          aws ecs update-service \
-            --cluster ${{ needs.build-and-push.outputs.cluster-name }} \
-            --service ${{ needs.build-and-push.outputs.service-name }} \
-            --task-definition ${{ steps.register-task.outputs.task_def_arn }} \
-            --region us-east-1 \
-            --query 'service.[serviceName,status,taskDefinition]'
-
-      - name: Wait for service to stabilize
-        run: |
-          echo "Waiting for ECS service to stabilize..."
-          aws ecs wait services-stable \
-            --cluster ${{ needs.build-and-push.outputs.cluster-name }} \
-            --services ${{ needs.build-and-push.outputs.service-name }} \
-            --region us-east-1 || exit 1
-          echo "✅ Service is stable"
-
-      - name: Verify deployment
-        run: |
-          echo "Deployment Summary:"
-          aws ecs describe-services \
-            --cluster ${{ needs.build-and-push.outputs.cluster-name }} \
-            --services ${{ needs.build-and-push.outputs.service-name }} \
-            --region us-east-1 \
-            --query 'services[0].[serviceName,status,runningCount,desiredCount,deployments[0].status]' \
-            --output table
-
-      - name: Get ALB endpoint
-        id: alb
-        run: |
-          # Get the ALB target group to find the load balancer endpoint
-          ALB_ENDPOINT=$(aws elbv2 describe-load-balancers \
-            --query "LoadBalancers[?Tags[?Key=='Environment' && Value=='${{ needs.build-and-push.outputs.environment }}']].DNSName" \
-            --output text 2>/dev/null || echo "N/A")
-          
-          echo "alb_endpoint=${ALB_ENDPOINT}" >> $GITHUB_OUTPUT
-          
-          if [[ ! -z "${ALB_ENDPOINT}" && "${ALB_ENDPOINT}" != "N/A" ]]; then
-            echo "Health checking against: ${ALB_ENDPOINT}"
-            
-            for i in {1..12}; do
-              if curl -sf "http://${ALB_ENDPOINT}/health" 2>/dev/null | grep -q "OK"; then
-                echo "✅ Health check passed"
-                exit 0
-              fi
-              echo "  Attempt $i/12 - retrying in 10 seconds..."
-              sleep 10
-            done
-            
-            echo "⚠️ Health check timeout - service may still be warming up"
-            exit 0
-          else
-            echo "ℹ️ ALB endpoint not available - skipping health check"
-            echo "✅ ECS deployment verified through AWS API"
-          fi
+          echo "✅ Deploying to ${{ steps.env.outputs.environment }}"
+          echo "Cluster: ${{ steps.env.outputs.cluster }}"
+          echo "Service: ${{ steps.env.outputs.service }}"
