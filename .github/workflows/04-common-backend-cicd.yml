@@ -12,7 +12,7 @@ on:
     paths:
       - 'backend/**'
       - 'shared/**'
-      - '04-common-backend-cicd.yml'
+      - '.github/workflows/04-common-backend-cicd.yml'
       - '!docs/**'           # OPTIMIZATION: Skip if only docs changed
       - '!*.md'
   push:
@@ -20,7 +20,7 @@ on:
     paths:
       - 'backend/**'
       - 'shared/**'
-      - '04-common-backend-cicd.yml'
+      - '.github/workflows/04-common-backend-cicd.yml'
       - '!docs/**'
       - '!*.md'
   workflow_dispatch:
