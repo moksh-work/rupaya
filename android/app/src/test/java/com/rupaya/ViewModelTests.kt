@@ -8,6 +8,7 @@ package com.rupaya
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.rupaya.features.authentication.presentation.LoginViewModel
 import com.rupaya.features.authentication.data.AuthModels
+import com.rupaya.features.home.data.DashboardSummary
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -270,9 +271,9 @@ class MockAuthApi {
 }
 
 class MockApiService {
-    var dashboardResponse: Result<AuthModels.DashboardSummary> = Result.failure(Exception("Not mocked"))
+    var dashboardResponse: Result<DashboardSummary> = Result.failure(Exception("Not mocked"))
 
-    suspend fun getDashboard(): Result<AuthModels.DashboardSummary> {
+    suspend fun getDashboard(): Result<DashboardSummary> {
         return dashboardResponse
     }
 }
