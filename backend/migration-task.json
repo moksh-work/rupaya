@@ -1,0 +1,37 @@
+{
+  "family": "rupaya-migration",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512",
+  "executionRoleArn": "arn:aws:iam::590184132516:role/rupaya-ecsTaskExecutionRole",
+  "containerDefinitions": [
+    {
+      "name": "migration",
+      "image": "590184132516.dkr.ecr.us-east-1.amazonaws.com/rupaya-backend:latest",
+      "essential": true,
+      "command": ["sh", "-c", "npm run migrate && echo 'Migrations completed'"],
+      "environment": [
+        { "name": "NODE_ENV", "value": "production" },
+        { "name": "DB_HOST", "value": "rupaya-postgres.c5y6yssse23v.us-east-1.rds.amazonaws.com" },
+        { "name": "DB_NAME", "value": "rupaya" },
+        { "name": "DB_USER", "value": "rupaya" },
+        { "name": "DB_SSL", "value": "true" }
+      ],
+      "secrets": [
+        {
+          "name": "DB_PASSWORD",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:590184132516:secret:rupaya/db/password-azAPnY"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/rupaya-backend",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "migration"
+        }
+      }
+    }
+  ]
+}

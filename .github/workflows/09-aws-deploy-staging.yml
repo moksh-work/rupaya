@@ -1,4 +1,4 @@
-name: 02 - AWS - Deploy to Staging Environment
+name: 09 - Manual Deploy to Staging
 
 # Workflow: Deploy backend to ECS (manual staging)
 
@@ -16,11 +16,10 @@ concurrency:
 
 env:
   AWS_REGION: us-east-1
-  AWS_ACCOUNT_ID: "102503111808"
-  AWS_ROLE_NAME: "rupaya-terraform-cicd"
-  ECR_REGISTRY: "102503111808.dkr.ecr.us-east-1.amazonaws.com"
-  ECS_CLUSTER_NAME: "rupaya-staging"
-  ECS_SERVICE_NAME: "rupaya-backend"
+  AWS_ROLE_ARN: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+  ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
+  ECS_CLUSTER_NAME: "rupaya-ecs-staging"
+  ECS_SERVICE_NAME: "rupaya-backend-staging"
 
 jobs:
   # ========== VALIDATION ==========
@@ -71,7 +70,7 @@ jobs:
       - name: Lint code
         run: |
           cd backend
-          npm run lint --if-present || echo "No lint script"
+          npm run lint 2>/dev/null || true
 
       - name: Run tests
         run: |
@@ -98,7 +97,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
 
       - name: Generate image tag
         id: image
@@ -111,14 +110,14 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/${{ env.AWS_ROLE_NAME }}
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to ECR
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v5
         with:
           context: ./backend
           file: ./backend/Dockerfile
@@ -148,7 +147,7 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/${{ env.AWS_ROLE_NAME }}
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Update ECS task definition
@@ -168,8 +167,8 @@ jobs:
         uses: aws-actions/amazon-ecs-deploy-task-definition@v1
         with:
           task-definition: task-definition.json
-          service: rupaya-backend-service-staging
-          cluster: rupaya-staging
+          service: rupaya-backend-staging
+          cluster: rupaya-ecs-staging
           wait-for-service-stability: true
 
   # ========== SMOKE TESTS ==========
@@ -194,7 +193,7 @@ jobs:
       - name: Run smoke tests
         run: |
           cd backend
-          npm run test:smoke -- --staging
+          npm run test:smoke
         env:
           API_URL: https://staging-api.rupaya.com
           TEST_USER_EMAIL: ${{ secrets.SMOKE_TEST_EMAIL }}

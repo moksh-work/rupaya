@@ -1,9 +1,10 @@
-name: 01 - Common - Terraform Infrastructure Deploy
+name: 06 - Terraform Infrastructure Deploy
 
 # Workflow: Terraform deployment following trunk-based strategy
 # PR → Plan only
 # main → Production environment
 # workflow_dispatch → Manual staging/production
+# This runs FIRST - all infrastructure must be ready before running tests and deployments
 
 on:
   push:
@@ -12,13 +13,13 @@ on:
     paths:
       - 'infra/aws/**'
       - 'infra/state-management/**'
-      - '.github/workflows/01-common-terraform-staged-deploy.yml'
+      - '.github/workflows/06-terraform-infrastructure.yml'
   pull_request:
     branches:
       - main
     paths:
       - 'infra/aws/**'
-      - '.github/workflows/01-common-terraform-staged-deploy.yml'
+      - '.github/workflows/06-terraform-infrastructure.yml'
   workflow_dispatch:
     inputs:
       environment:
@@ -41,9 +42,8 @@ concurrency:
 env:
   TF_IN_AUTOMATION: "true"
   AWS_REGION: "us-east-1"
-  AWS_ACCOUNT_ID: "102503111808"
-  AWS_ROLE_NAME: "rupaya-terraform-cicd"
-  TFSTATE_BUCKET: "rupaya-terraform-state-102503111808"
+  AWS_ROLE_ARN: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+  TFSTATE_BUCKET: ${{ secrets.TFSTATE_BUCKET_NAME }}
   TFSTATE_DYNAMODB_TABLE: "rupaya-terraform-state-lock"
 
 jobs:
@@ -114,7 +114,7 @@ jobs:
       - name: Configure AWS Credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/${{ env.AWS_ROLE_NAME }}
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Verify remote state backend
@@ -187,7 +187,7 @@ jobs:
       - name: Configure AWS Credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/${{ env.AWS_ROLE_NAME }}
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Verify remote state backend
@@ -228,12 +228,3 @@ jobs:
           echo "Branch: ${{ github.ref }}"
           echo "Commit: ${{ github.sha }}"
           terraform output
-
-      - name: Terraform Plan
-        working-directory: infra/aws
-        run: terraform plan
-
-      - name: Terraform Apply (All)
-        if: ${{ inputs.auto_apply == 'true' }}
-        working-directory: infra/aws
-        run: terraform apply -auto-approve

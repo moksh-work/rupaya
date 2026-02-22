@@ -25,12 +25,12 @@ struct APIConfig {
     // MARK: - Environment Configuration
     
     #if DEBUG
-    /// Development/Local backend URL
-    static let baseURL = "http://localhost:3000"
+    /// Development/Local backend URL - Now pointing to AWS
+    static let baseURL = "https://api.cloudycs.com"
     static let isDebug = true
     #else
-    /// Production backend URL
-    static let baseURL = "https://api.rupaya.in"
+    /// Production backend URL - AWS deployment
+    static let baseURL = "https://api.cloudycs.com"
     static let isDebug = false
     #endif
     

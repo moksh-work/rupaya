@@ -1,0 +1,87 @@
+# Destruction Tool Makefile Targets
+# 
+# Add these targets to your main Makefile or use this as a reference
+# 
+# Usage:
+#   make destroy-infra        # Destroy /infra/aws
+#   make destroy-dev          # Destroy development
+#   make destroy-prod         # Destroy production  
+#   make destroy-all          # Destroy everything
+#   make validate-destroy     # Pre-destruction validation
+#   make help-destroy         # Show destruction help
+
+.PHONY: validate-destroy validate-destroy-verbose
+validate-destroy: ## Validate resources before destruction
+	@echo "Running pre-destruction validation..."
+	@python3 deployment/scripts/pre-destroy-validator.py --region us-east-1
+
+validate-destroy-verbose: ## Validate resources with verbose output
+	@echo "Running pre-destruction validation (verbose)..."
+	@python3 deployment/scripts/pre-destroy-validator.py --region us-east-1 --verbose
+
+.PHONY: destroy-infra
+destroy-infra: ## Destroy /infra/aws infrastructure
+	@echo "⚠️  WARNING: This will permanently delete /infra/aws infrastructure"
+	@chmod +x deployment/scripts/destroy-infrastructure.sh
+	@deployment/scripts/destroy-infrastructure.sh --infra
+
+.PHONY: destroy-prod
+destroy-prod: ## Destroy production infrastructure
+	@echo "⚠️  WARNING: This will permanently delete PRODUCTION infrastructure"
+	@chmod +x deployment/scripts/destroy-infrastructure.sh
+	@deployment/scripts/destroy-infrastructure.sh --prod
+
+.PHONY: destroy-dev
+destroy-dev: ## Destroy development infrastructure
+	@echo "⚠️  WARNING: This will permanently delete development infrastructure"
+	@chmod +x deployment/scripts/destroy-infrastructure.sh
+	@deployment/scripts/destroy-infrastructure.sh --dev
+
+.PHONY: destroy-all
+destroy-all: ## Destroy ALL infrastructure (prod + dev + infra)
+	@echo "⚠️  CRITICAL WARNING: This will permanently delete ALL infrastructure"
+	@chmod +x deployment/scripts/destroy-infrastructure.sh
+	@deployment/scripts/destroy-infrastructure.sh --all
+
+.PHONY: destroy-all-confirm
+destroy-all-confirm: ## Destroy ALL infrastructure without prompts
+	@echo "⚠️  CRITICAL WARNING: Destroying all infrastructure without confirmation"
+	@chmod +x deployment/scripts/destroy-infrastructure.sh
+	@deployment/scripts/destroy-infrastructure.sh --all --confirm
+
+.PHONY: destroy-logs
+destroy-logs: ## Show latest destruction logs
+	@echo "Latest destruction logs:"
+	@tail -50 deployment/scripts/logs/destroy_*.log 2>/dev/null || echo "No logs found"
+
+.PHONY: help-destroy
+help-destroy: ## Show destruction tool help and documentation
+	@echo "=========================================="
+	@echo "AWS Infrastructure Destruction Tools"
+	@echo "=========================================="
+	@echo ""
+	@./deployment/scripts/destroy-infrastructure.sh --help
+	@echo ""
+	@echo "Full documentation:"
+	@echo "  cat deployment/scripts/DESTRUCTION_GUIDE.md"
+	@echo ""
+	@echo "Common commands:"
+	@echo "  cat deployment/scripts/DESTRUCTION_COMMANDS.sh"
+	@echo ""
+
+# Add to your help target
+help: help-destroy-brief ## ... existing help targets ...
+
+.PHONY: help-destroy-brief
+help-destroy-brief:
+	@echo ""
+	@echo "Infrastructure Destruction:"
+	@echo "  make validate-destroy      - Validate resources before destruction"
+	@echo "  make destroy-infra         - Destroy /infra/aws only"
+	@echo "  make destroy-prod          - Destroy production"
+	@echo "  make destroy-dev           - Destroy development"
+	@echo "  make destroy-all           - Destroy all infrastructure"
+	@echo "  make help-destroy          - Show detailed destruction help"
+	@echo ""
+	@echo "  ⚠️  USE WITH CAUTION - destroys real infrastructure!"
+	@echo ""

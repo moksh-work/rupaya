@@ -38,7 +38,7 @@ resource "aws_lb_listener" "http" {
     redirect {
       port        = "443"
       protocol    = "HTTPS"
-      status_code = "HTTP_301"  # Permanent redirect
+      status_code = "HTTP_301" # Permanent redirect
     }
   }
 }
@@ -50,10 +50,10 @@ resource "aws_lb_listener" "https_prod" {
   load_balancer_arn = aws_lb.api.arn
   port              = 443
   protocol          = "HTTPS"
-  
+
   # Use production certificate (auto-renewed by AWS)
-  certificate_arn   = module.certificates.certificate_production_arn
-  ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"  # TLS 1.2 minimum
+  certificate_arn = module.certificates.certificate_production_arn
+  ssl_policy      = "ELBSecurityPolicy-TLS-1-2-2017-01" # TLS 1.2 minimum
 
   default_action {
     type             = "forward"
@@ -74,12 +74,12 @@ resource "aws_lb_listener" "https_prod" {
 resource "aws_lb_listener" "https_staging" {
   count             = var.enable_staging_listener ? 1 : 0
   load_balancer_arn = aws_lb.api.arn
-  port              = 8443  # Alternative HTTPS port for staging
+  port              = 8443 # Alternative HTTPS port for staging
   protocol          = "HTTPS"
-  
+
   # Use staging certificate
-  certificate_arn   = module.certificates.certificate_staging_arn
-  ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
+  certificate_arn = module.certificates.certificate_staging_arn
+  ssl_policy      = "ELBSecurityPolicy-TLS-1-2-2017-01"
 
   default_action {
     type             = "forward"

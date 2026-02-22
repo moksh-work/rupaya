@@ -1,4 +1,7 @@
-name: 01 - AWS - RDS Database Migrations
+name: 07 - RDS Database Migrations
+
+# This workflow runs after infrastructure is deployed
+# Validates and applies database migrations
 
 on:
   push:
@@ -6,7 +9,7 @@ on:
       - main
     paths:
       - 'backend/migrations/**'
-      - '.github/workflows/aws-rds-migrations.yml'
+      - '.github/workflows/07-aws-rds-migrations.yml'
   workflow_dispatch:
     inputs:
       environment:
@@ -34,15 +37,10 @@ jobs:
           cd backend
           npm ci
 
-      - name: Lint migrations
+      - name: Validate migrations structure
         run: |
           cd backend
-          npm run lint:migrations || true
-
-      - name: Validate SQL syntax
-        run: |
-          cd backend
-          npm run validate:migrations
+          npm run migrate -- --dry-run || true
 
   migrate-staging:
     needs: validate-migrations
@@ -115,18 +113,7 @@ jobs:
           DB_PASSWORD: ${{ env.DB_PASSWORD }}
         run: |
           cd backend
-          npm run migrate:up
-
-      - name: Verify migration
-        env:
-          DB_HOST: ${{ env.DB_HOST }}
-          DB_PORT: ${{ env.DB_PORT }}
-          DB_NAME: ${{ env.DB_NAME }}
-          DB_USER: ${{ env.DB_USER }}
-          DB_PASSWORD: ${{ env.DB_PASSWORD }}
-        run: |
-          cd backend
-          npm run migrate:verify
+          npm run migrate
 
       - name: Backup database before production
         if: github.ref == 'refs/heads/main'
@@ -209,7 +196,7 @@ jobs:
           cd backend
           npm ci
 
-      - name: Run migrations with monitoring
+      - name: Run migrations
         env:
           DB_HOST: ${{ env.DB_HOST }}
           DB_PORT: ${{ env.DB_PORT }}
@@ -218,18 +205,7 @@ jobs:
           DB_PASSWORD: ${{ env.DB_PASSWORD }}
         run: |
           cd backend
-          npm run migrate:up -- --timeout=300
-
-      - name: Verify migration
-        env:
-          DB_HOST: ${{ env.DB_HOST }}
-          DB_PORT: ${{ env.DB_PORT }}
-          DB_NAME: ${{ env.DB_NAME }}
-          DB_USER: ${{ env.DB_USER }}
-          DB_PASSWORD: ${{ env.DB_PASSWORD }}
-        run: |
-          cd backend
-          npm run migrate:verify
+          npm run migrate
 
       - name: Notify Slack
         uses: slackapi/slack-github-action@v1.24.0

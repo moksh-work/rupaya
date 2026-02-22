@@ -59,6 +59,10 @@ COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
 # Copy source code
 COPY --chown=nodejs:nodejs . .
 
+# Copy and set permissions for entrypoint script
+COPY --chown=nodejs:nodejs docker-entrypoint.sh ./
+RUN chmod +x docker-entrypoint.sh
+
 # Switch to nodejs user
 USER nodejs
 
@@ -69,8 +73,8 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3000/health', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"
 
-# Use dumb-init to handle signals properly
-ENTRYPOINT ["dumb-init", "--"]
+# Use dumb-init to handle signals properly and run entrypoint
+ENTRYPOINT ["dumb-init", "--", "./docker-entrypoint.sh"]
 
 # Run production server
 CMD ["npm", "start"]

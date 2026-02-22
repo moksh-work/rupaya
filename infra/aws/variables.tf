@@ -13,6 +13,12 @@ variable "region" {
   default     = "us-east-1"
 }
 
+variable "environment" {
+  description = "Deployment environment (staging/production)"
+  type        = string
+  default     = "production"
+}
+
 variable "project_name" {
   description = "Project name prefix"
   type        = string
@@ -149,4 +155,17 @@ variable "ssl_policy" {
   # - ELBSecurityPolicy-TLS-1-2-2017-01: TLS 1.2+ (recommended)
   # - ELBSecurityPolicy-TLS-1-2-Ext-2018-06: TLS 1.2+ with more ciphers
   # - ELBSecurityPolicy-FS-1-2-Res-2019-08: TLS 1.2+ with forward secrecy (most secure)
+}
+
+# GitHub OIDC Configuration
+variable "github_org" {
+  description = "GitHub organization name"
+  type        = string
+  default     = "your-github-org"
+}
+
+variable "github_repo" {
+  description = "GitHub repository name"
+  type        = string
+  default     = "rupaya"
 }

@@ -15,10 +15,10 @@
 module "certificates" {
   source = "./modules/certificates"
 
-  project_name              = var.project_name
-  route53_domain            = var.route53_domain
-  route53_zone_id           = aws_route53_zone.main.zone_id
-  certificate_alert_email   = var.certificate_alert_email
+  project_name                   = var.project_name
+  route53_domain                 = var.route53_domain
+  route53_zone_id                = aws_route53_zone.main.zone_id
+  certificate_alert_email        = var.certificate_alert_email
   certificate_validation_timeout = var.certificate_validation_timeout
-  enable_staging_certificate = var.enable_staging_certificate
+  enable_staging_certificate     = var.enable_staging_certificate
 }

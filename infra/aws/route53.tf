@@ -13,7 +13,7 @@ resource "aws_route53_record" "api_prod" {
   zone_id = aws_route53_zone.main.zone_id
   name    = "api.${var.route53_domain}"
   type    = "A"
-  
+
   alias {
     name                   = aws_lb.api.dns_name
     zone_id                = aws_lb.api.zone_id
@@ -29,7 +29,7 @@ resource "aws_route53_record" "api_staging" {
   zone_id = aws_route53_zone.main.zone_id
   name    = "staging-api.${var.route53_domain}"
   type    = "A"
-  
+
   alias {
     name                   = aws_lb.api.dns_name
     zone_id                = aws_lb.api.zone_id
@@ -46,7 +46,7 @@ resource "aws_route53_record" "root" {
   zone_id = aws_route53_zone.main.zone_id
   name    = var.route53_domain
   type    = "A"
-  
+
   alias {
     name                   = aws_lb.api.dns_name
     zone_id                = aws_lb.api.zone_id
@@ -62,7 +62,7 @@ resource "aws_route53_record" "www" {
   zone_id = aws_route53_zone.main.zone_id
   name    = "www.${var.route53_domain}"
   type    = "A"
-  
+
   alias {
     name                   = aws_lb.api.dns_name
     zone_id                = aws_lb.api.zone_id

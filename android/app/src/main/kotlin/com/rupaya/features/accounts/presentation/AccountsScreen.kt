@@ -27,7 +27,7 @@ fun AccountsScreen(
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Account Filter Row
-        ScrollableTabRow(
+        PrimaryScrollableTabRow(
             selectedTabIndex = accounts.indexOfFirst { it.accountId == selectedAccountId }.takeIf { it >= 0 } ?: 0,
             modifier = Modifier.fillMaxWidth()
         ) {

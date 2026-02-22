@@ -3,7 +3,7 @@ const jwt = require('jsonwebtoken');
 const speakeasy = require('speakeasy');
 const QRCode = require('qrcode');
 const { v4: uuidv4 } = require('uuid');
-const { pwnedPassword } = require('hibp');
+// const { pwnedPassword } = require('hibp'); // Disabled due to ESM compatibility issue
 const db = require('../config/database');
 const bcrypt = require('bcryptjs');
 
@@ -67,18 +67,18 @@ class AuthService {
       }
     }
 
-    // Check if password has been pwned (skip in tests)
-    if (process.env.DISABLE_PWNED_CHECK !== 'true' && process.env.NODE_ENV !== 'test') {
-      try {
-        const pwnedCount = await pwnedPassword(password);
-        if (pwnedCount > 0) {
-          throw new Error('This password has been breached. Please use a different password.');
-        }
-      } catch (err) {
-        // If hibp service is down, allow signup to proceed
-        console.warn('Could not check password breach status:', err.message);
-      }
-    }
+    // Password breach checking disabled (hibp ESM compatibility issue)
+    // TODO: Re-enable with ESM-compatible solution
+    // if (process.env.DISABLE_PWNED_CHECK !== 'true' && process.env.NODE_ENV !== 'test') {
+    //   try {
+    //     const pwnedCount = await pwnedPassword(password);
+    //     if (pwnedCount > 0) {
+    //       throw new Error('This password has been breached. Please use a different password.');
+    //     }
+    //   } catch (err) {
+    //     console.warn('Could not check password breach status:', err.message);
+    //   }
+    // }
 
     // Check if user already exists
     const existingUser = await User.findByEmail(email);

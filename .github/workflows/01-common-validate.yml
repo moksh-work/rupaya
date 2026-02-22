@@ -1,4 +1,7 @@
-name: 04 - Common - Validate & Test (All Branches)
+name: 01 - Code Validation & Linting
+
+# Runs early in the pipeline for code quality checks
+# Triggered on push/PR to main or feature branches
 
 on:
   push:
@@ -111,7 +114,7 @@ jobs:
           DISABLE_PASSWORD_STRENGTH: "true"
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
           files: ./backend/coverage/coverage-final.json
           flags: backend

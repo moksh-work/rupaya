@@ -28,7 +28,7 @@ fun InsightsScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        TabRow(selectedTabIndex = selectedTab) {
+        PrimaryTabRow(selectedTabIndex = selectedTab) {
             Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Analytics") })
             Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Budgets") })
             Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text("Goals") })
@@ -73,7 +73,7 @@ fun CategoryBreakdownCard(item: com.rupaya.features.home.data.CategoryBreakdown)
             }
             Spacer(modifier = Modifier.height(8.dp))
             LinearProgressIndicator(
-                progress = (item.percentage / 100).toFloat(),
+                progress = { (item.percentage / 100).toFloat() },
                 modifier = Modifier.fillMaxWidth().height(8.dp),
                 color = Color(0xFF2196F3)
             )
@@ -122,7 +122,7 @@ fun BudgetCard(budget: com.rupaya.features.analytics.data.Budget) {
             }
             Spacer(modifier = Modifier.height(8.dp))
             LinearProgressIndicator(
-                progress = progress.toFloat(),
+                progress = { progress.toFloat() },
                 modifier = Modifier.fillMaxWidth().height(10.dp),
                 color = color
             )
@@ -164,7 +164,7 @@ fun GoalCard(goal: com.rupaya.features.analytics.data.Goal) {
             }
             Spacer(modifier = Modifier.height(8.dp))
             LinearProgressIndicator(
-                progress = progress.toFloat(),
+                progress = { progress.toFloat() },
                 modifier = Modifier.fillMaxWidth().height(10.dp),
                 color = Color(0xFF2196F3)
             )

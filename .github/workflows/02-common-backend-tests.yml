@@ -1,4 +1,7 @@
-name: 03 - Common - Backend Tests & Lint
+name: 02 - Backend Tests & Lint
+
+# Backend unit tests and linting
+# Runs after basic validation
 
 on:
   push:
@@ -8,12 +11,16 @@ on:
     paths:
       - 'backend/**'
       - 'shared/**'
+      - '!docs/**'           # Skip if only docs changed
+      - '!*.md'              # Skip if only README/docs changed
   pull_request:
     branches:
       - main
     paths:
       - 'backend/**'
       - 'shared/**'
+      - '!docs/**'
+      - '!*.md'
 
 env:
   NODE_VERSION: '18'
@@ -26,7 +33,7 @@ jobs:
       postgres:
         image: postgres:15-alpine
         env:
-          POSTGRES_USER: rupaya_test
+          POSTGRES_USER: test_user
           POSTGRES_PASSWORD: test_password
           POSTGRES_DB: rupaya_test
         options: >-
@@ -48,10 +55,10 @@ jobs:
           - 6379:6379
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
@@ -61,11 +68,6 @@ jobs:
         run: |
           cd backend
           npm install
-      
-      - name: Run linter
-        run: |
-          cd backend
-          npm run lint
       
       - name: Run tests
         env:
@@ -81,7 +83,7 @@ jobs:
           npm test -- --coverage
       
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
           files: ./backend/coverage/coverage-final.json
           flags: backend

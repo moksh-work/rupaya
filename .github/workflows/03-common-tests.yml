@@ -1,4 +1,8 @@
-name: 05 - Common - Run Tests
+name: 03 - Full Test Suite
+
+# Comprehensive test suite including backend, frontend, and coverage
+# Runs in PARALLEL with other checks on push/PR to main
+# No sequential dependency - tests run simultaneously for faster feedback
 
 on:
   push:

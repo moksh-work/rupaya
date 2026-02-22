@@ -4,7 +4,7 @@ use_frameworks!
 
 target 'RUPAYA' do
   # Networking
-  pod 'Alamofire', '~> 5.8'
+  pod 'Alamofire', '~> 5.11'
   
   # Security
   pod 'KeychainAccess', '~> 4.2'

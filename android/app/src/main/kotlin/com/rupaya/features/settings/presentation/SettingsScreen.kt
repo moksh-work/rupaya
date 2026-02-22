@@ -3,6 +3,7 @@ package com.rupaya.features.settings.presentation
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -37,7 +38,7 @@ fun SettingsScreen(
         }
 
         item {
-            Divider(modifier = Modifier.padding(vertical = 16.dp))
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
             Text("Security & Privacy", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(vertical = 8.dp))
         }
 
@@ -57,7 +58,7 @@ fun SettingsScreen(
         }
 
         item {
-            Divider(modifier = Modifier.padding(vertical = 16.dp))
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
             Text("App", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(vertical = 8.dp))
         }
 
@@ -74,7 +75,7 @@ fun SettingsScreen(
         }
 
         item {
-            Divider(modifier = Modifier.padding(vertical = 16.dp))
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
             Text("Support", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(vertical = 8.dp))
         }
 
@@ -87,7 +88,7 @@ fun SettingsScreen(
         }
 
         item {
-            Divider(modifier = Modifier.padding(vertical = 16.dp))
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
         }
 
         item {
@@ -128,7 +129,7 @@ fun SettingsButton(label: String, icon: androidx.compose.ui.graphics.vector.Imag
             Icon(icon, contentDescription = null)
             Text(label)
             Spacer(modifier = Modifier.weight(1f))
-            Icon(Icons.Default.ArrowForward, contentDescription = null)
+            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
         }
     }
 }

@@ -5,9 +5,9 @@
 # ========== PRODUCTION CERTIFICATE ==========
 resource "aws_acm_certificate" "production" {
   domain_name = var.route53_domain
-  
+
   validation_method = "DNS"
-  
+
   subject_alternative_names = [
     "api.${var.route53_domain}",
     "www.${var.route53_domain}",
@@ -28,9 +28,9 @@ resource "aws_acm_certificate" "production" {
 # ========== STAGING CERTIFICATE ==========
 resource "aws_acm_certificate" "staging" {
   domain_name = "staging-api.${var.route53_domain}"
-  
+
   validation_method = "DNS"
-  
+
   subject_alternative_names = [
     "staging.${var.route53_domain}",
   ]
@@ -91,7 +91,7 @@ resource "aws_route53_record" "acm_validation_staging" {
 # Uses extended timeout to allow DNS propagation
 resource "aws_acm_certificate_validation" "production" {
   certificate_arn = aws_acm_certificate.production.arn
-  
+
   timeouts {
     create = var.certificate_validation_timeout
   }
@@ -105,7 +105,7 @@ resource "aws_acm_certificate_validation" "production" {
 # ========== CERTIFICATE VALIDATION - STAGING ==========
 resource "aws_acm_certificate_validation" "staging" {
   certificate_arn = aws_acm_certificate.staging.arn
-  
+
   timeouts {
     create = var.certificate_validation_timeout
   }
@@ -115,8 +115,8 @@ resource "aws_acm_certificate_validation" "staging" {
 
 # ========== SNS TOPIC FOR CERTIFICATE EXPIRATION ALERTS ==========
 resource "aws_sns_topic" "certificate_expiration" {
-  name            = "${var.project_name}-cert-expiration-alerts"
-  display_name    = "Certificate Expiration Alerts"
+  name              = "${var.project_name}-cert-expiration-alerts"
+  display_name      = "Certificate Expiration Alerts"
   kms_master_key_id = "alias/aws/sns"
 
   tags = {
@@ -146,16 +146,16 @@ resource "aws_sns_topic_policy" "certificate_expiration" {
 
 # ========== SNS EMAIL SUBSCRIPTION ==========
 resource "aws_sns_topic_subscription" "certificate_expiration_email" {
-  topic_arn            = aws_sns_topic.certificate_expiration.arn
-  protocol             = "email"
-  endpoint             = var.certificate_alert_email
+  topic_arn = aws_sns_topic.certificate_expiration.arn
+  protocol  = "email"
+  endpoint  = var.certificate_alert_email
 }
 
 # ========== CLOUDWATCH EVENT RULE FOR EXPIRATION MONITORING ==========
 resource "aws_cloudwatch_event_rule" "acm_expiration" {
-  name            = "${var.project_name}-cert-expiration-check"
-  description     = "Monitor ACM certificates 30 days before expiration"
-  event_bus_name  = "default"
+  name           = "${var.project_name}-cert-expiration-check"
+  description    = "Monitor ACM certificates 30 days before expiration"
+  event_bus_name = "default"
 
   # EventBridge rule to check certificate expiration
   event_pattern = jsonencode({
