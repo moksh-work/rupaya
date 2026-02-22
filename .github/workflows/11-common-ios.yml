@@ -1,6 +1,21 @@
 name: 11 - Build iOS App
 
+# iOS build and release workflow
+# Triggers: manual dispatch (always available) + auto on feature/main when ios files change
+
 on:
+  push:
+    branches:
+      - main
+      - feature/**
+    paths:
+      - 'ios/**'
+      - 'shared/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'ios/**'
+      - 'shared/**'
   workflow_dispatch:
 
 jobs:

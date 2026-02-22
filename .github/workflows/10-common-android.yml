@@ -1,6 +1,21 @@
 name: 10 - Build Android App
 
+# Android build and release workflow
+# Triggers: manual dispatch (always available) + auto on feature/main when android files change
+
 on:
+  push:
+    branches:
+      - main
+      - feature/**
+    paths:
+      - 'android/**'
+      - 'shared/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'android/**'
+      - 'shared/**'
   workflow_dispatch:
 
 jobs:
