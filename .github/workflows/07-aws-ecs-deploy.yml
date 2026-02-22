@@ -7,10 +7,10 @@ name: 07 - ECS Deploy (Unified Staging & Production)
 on:
   push:
     branches:
-      - main       # Auto-deploy to production on main push
+      - main       # Auto-deploy to production on main push (not feature branches)
     paths:
       - 'backend/**'
-      - '.github/workflows/07-aws-ecs-deploy.yml'
+      - '07-aws-ecs-deploy.yml'
   workflow_dispatch:
     inputs:
       environment:

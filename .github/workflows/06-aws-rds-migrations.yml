@@ -9,7 +9,7 @@ on:
       - main
     paths:
       - 'backend/migrations/**'
-      - '.github/workflows/06-aws-rds-migrations.yml'
+      - '06-aws-rds-migrations.yml'
   workflow_dispatch:
     inputs:
       environment:

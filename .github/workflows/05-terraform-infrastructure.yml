@@ -13,13 +13,13 @@ on:
     paths:
       - 'infra/aws/**'
       - 'infra/state-management/**'
-      - '.github/workflows/05-terraform-infrastructure.yml'
+      - '05-terraform-infrastructure.yml'
   pull_request:
     branches:
       - main
     paths:
       - 'infra/aws/**'
-      - '.github/workflows/05-terraform-infrastructure.yml'
+      - '05-terraform-infrastructure.yml'
   workflow_dispatch:
     inputs:
       environment:
