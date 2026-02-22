@@ -1,4 +1,4 @@
-name: 04 - Backend CI/CD Pipeline
+name: 06 - Backend CI/CD Pipeline
 
 # Workflow: Backend testing and deployment following trunk-based flow
 # PR → Run tests only (no deployment)
@@ -12,7 +12,7 @@ on:
     paths:
       - 'backend/**'
       - 'shared/**'
-      - '.github/workflows/04-common-backend-cicd.yml'
+      - '.github/workflows/06-common-backend-cicd.yml'
       - '!docs/**'           # OPTIMIZATION: Skip if only docs changed
       - '!*.md'
   push:
@@ -20,7 +20,7 @@ on:
     paths:
       - 'backend/**'
       - 'shared/**'
-      - '.github/workflows/04-common-backend-cicd.yml'
+      - '.github/workflows/06-common-backend-cicd.yml'
       - '!docs/**'
       - '!*.md'
   workflow_dispatch:

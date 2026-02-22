@@ -1,4 +1,4 @@
-name: 11 - Build iOS App
+name: 05 - iOS Build & Release
 
 # iOS build and release workflow
 # Triggers: manual dispatch (always available) + auto on feature/main when ios files change

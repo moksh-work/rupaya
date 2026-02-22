@@ -1,4 +1,4 @@
-name: 05 - Terraform Infrastructure Deploy
+name: 07 - Terraform Infrastructure Deploy
 
 # Workflow: Terraform deployment following trunk-based strategy
 # PR → Plan only
@@ -13,13 +13,13 @@ on:
     paths:
       - 'infra/aws/**'
       - 'infra/state-management/**'
-      - '.github/workflows/05-terraform-infrastructure.yml'
+      - '.github/workflows/07-terraform-infrastructure.yml'
   pull_request:
     branches:
       - main
     paths:
       - 'infra/aws/**'
-      - '.github/workflows/05-terraform-infrastructure.yml'
+      - '.github/workflows/07-terraform-infrastructure.yml'
   workflow_dispatch:
     inputs:
       environment:

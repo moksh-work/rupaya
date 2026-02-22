@@ -1,4 +1,4 @@
-name: 10 - Build Android App
+name: 04 - Android Build & Release
 
 # Android build and release workflow
 # Triggers: manual dispatch (always available) + auto on feature/main when android files change
