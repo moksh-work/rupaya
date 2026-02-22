@@ -1,0 +1,6 @@
+framework module Pods_RUPAYA {
+  umbrella header "Pods-RUPAYA-umbrella.h"
+
+  export *
+  module * { export * }
+}

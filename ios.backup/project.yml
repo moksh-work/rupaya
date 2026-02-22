@@ -1,0 +1,47 @@
+name: RUPAYA
+options:
+  bundleIdPrefix: com.rupaya
+  deploymentTarget:
+    iOS: 15.0
+  developmentLanguage: en
+  xcodeVersion: "15.0"
+
+settings:
+  SWIFT_VERSION: 5.9
+  PRODUCT_NAME: RUPAYA
+  MARKETING_VERSION: 1.0.0
+  CURRENT_PROJECT_VERSION: 1
+
+targets:
+  RUPAYA:
+    type: application
+    platform: iOS
+    deploymentTarget: "15.0"
+    sources:
+      - path: RUPAYA
+        type: group
+    info:
+      path: RUPAYA/Info.plist
+      properties:
+        CFBundleDisplayName: RUPAYA
+        CFBundleIdentifier: $(PRODUCT_BUNDLE_IDENTIFIER)
+        CFBundleInfoDictionaryVersion: "6.0"
+        CFBundleName: $(PRODUCT_NAME)
+        CFBundlePackageType: APPL
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSRequiresIPhoneOS: true
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.rupaya.app
+      INFOPLIST_FILE: RUPAYA/Info.plist
+      SWIFT_VERSION: "5.9"
+      TARGETED_DEVICE_FAMILY: "1,2"
+      CODE_SIGN_STYLE: Automatic
+      DEVELOPMENT_TEAM: ""
