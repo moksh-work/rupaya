@@ -1,16 +1,10 @@
 name: 07 - ECS Deploy (Unified Staging & Production)
 
-# Unified ECS deployment workflow (CONSOLIDATED from workflows 07 & 11)
-# Handles both automatic production deploys and manual staging/production deployments
+# Unified ECS deployment workflow for manual deployments only
+# Prevents accidental auto-deployments from any branch
 # Features: Auto-environment detection, custom version tags, task definition updates, health checks
 
 on:
-  push:
-    branches:
-      - main       # Auto-deploy to production on main push only
-    paths:
-      - 'backend/**'
-      - '.github/workflows/07-aws-ecs-deploy.yml'
   workflow_dispatch:
     inputs:
       environment:
