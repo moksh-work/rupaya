@@ -1,4 +1,4 @@
-name: 12 - Build iOS App
+name: 11 - Build iOS App
 
 on:
   workflow_dispatch:

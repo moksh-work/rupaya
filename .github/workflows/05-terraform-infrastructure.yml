@@ -1,10 +1,10 @@
-name: 06 - Terraform Infrastructure Deploy
+name: 05 - Terraform Infrastructure Deploy
 
 # Workflow: Terraform deployment following trunk-based strategy
 # PR → Plan only
 # main → Production environment
 # workflow_dispatch → Manual staging/production
-# This runs FIRST - all infrastructure must be ready before running tests and deployments
+# Runs as part of the infrastructure-first pipeline
 
 on:
   push:
@@ -13,13 +13,13 @@ on:
     paths:
       - 'infra/aws/**'
       - 'infra/state-management/**'
-      - '.github/workflows/06-terraform-infrastructure.yml'
+      - '.github/workflows/05-terraform-infrastructure.yml'
   pull_request:
     branches:
       - main
     paths:
       - 'infra/aws/**'
-      - '.github/workflows/06-terraform-infrastructure.yml'
+      - '.github/workflows/05-terraform-infrastructure.yml'
   workflow_dispatch:
     inputs:
       environment:

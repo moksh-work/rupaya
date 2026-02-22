@@ -1,4 +1,4 @@
-name: 07 - RDS Database Migrations
+name: 06 - RDS Database Migrations
 
 # This workflow runs after infrastructure is deployed
 # Validates and applies database migrations
@@ -9,7 +9,7 @@ on:
       - main
     paths:
       - 'backend/migrations/**'
-      - '.github/workflows/07-aws-rds-migrations.yml'
+      - '.github/workflows/06-aws-rds-migrations.yml'
   workflow_dispatch:
     inputs:
       environment:

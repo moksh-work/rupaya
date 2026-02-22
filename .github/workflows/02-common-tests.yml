@@ -1,4 +1,4 @@
-name: 03 - Full Test Suite
+name: 02 - Full Test Suite
 
 # Comprehensive test suite including backend, frontend, and coverage
 # Runs in PARALLEL with other checks on push/PR to main
