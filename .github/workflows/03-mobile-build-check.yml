@@ -43,7 +43,11 @@ jobs:
             -scheme RUPAYA \
             -configuration Debug \
             -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath build
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            ONLY_ACTIVE_ARCH=YES
       
       # Note: iOS tests skipped due to GitHub Actions environment limitations
       # Run locally with: xcodebuild test
