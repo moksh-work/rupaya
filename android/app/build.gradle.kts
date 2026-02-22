@@ -1,3 +1,6 @@
+// Rupaya Android Application Build Configuration
+// Build version: 1.0.0+1
+
 plugins {
     id("com.android.application")
     id("com.google.devtools.ksp")
