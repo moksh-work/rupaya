@@ -37,10 +37,7 @@ jobs:
         cd ios
         pod install
     
-    - name: Setup Xcode
-      uses: maxim-lobanov/setup-xcode@v3
-      with:
-        xcode-version: latest-stable
+    # Note: Using default Xcode from macos-latest runner (Xcode pre-installed)
     
     - name: Build and test
       working-directory: ./ios
@@ -84,10 +81,7 @@ jobs:
     - name: Install Fastlane
       run: gem install fastlane
     
-    - name: Setup Xcode
-      uses: maxim-lobanov/setup-xcode@v3
-      with:
-        xcode-version: latest-stable
+    # Note: Using default Xcode from macos-latest runner
     
     - name: Import certificates
       env:
