@@ -46,12 +46,12 @@ jobs:
       - name: Build iOS app
         run: |
           cd ios
-          xcodebuild archive \
+          xcodebuild build \
             -workspace RUPAYA.xcworkspace \
             -scheme RUPAYA \
             -configuration Debug \
             -destination 'generic/platform=iOS Simulator' \
-            -archivePath build/RUPAYA.xcarchive \
+            -derivedDataPath build \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
