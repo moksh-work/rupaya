@@ -1,7 +1,8 @@
 name: 01 - Code Validation & Linting
 
-# Runs early in the pipeline for code quality checks
-# Triggered on push/PR to main or feature branches
+# Runs early in the pipeline for comprehensive code quality and backend testing
+# Triggered on push/PR to main or all feature branches
+# Includes: linting, formatting, backend tests, security scanning, build verification
 
 on:
   push:

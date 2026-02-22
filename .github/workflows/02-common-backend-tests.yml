@@ -1,7 +1,8 @@
 name: 02 - Backend Tests & Lint
 
-# Backend unit tests and linting
-# Runs after basic validation
+# DEPRECATED: Backend tests consolidated into Workflow 01
+# This workflow is kept as a placeholder for future backend-specific CI additions
+# Path filters remain to enable selective re-activation if needed
 
 on:
   push:
@@ -22,76 +23,13 @@ on:
       - '!docs/**'
       - '!*.md'
 
-env:
-  NODE_VERSION: '18'
-
 jobs:
-  test:
+  # Tests have been consolidated into workflow 01 - Code Validation & Linting
+  # This workflow now serves as a placeholder for future backend-specific CI steps
+  placeholder:
     runs-on: ubuntu-latest
-    
-    services:
-      postgres:
-        image: postgres:15-alpine
-        env:
-          POSTGRES_USER: test_user
-          POSTGRES_PASSWORD: test_password
-          POSTGRES_DB: rupaya_test
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-      
-      redis:
-        image: redis:7-alpine
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 6379:6379
-
     steps:
-      - uses: actions/checkout@v4
-      
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: backend/package-lock.json
-      
-      - name: Install dependencies
+      - name: Note
         run: |
-          cd backend
-          npm install
-      
-      - name: Run tests
-        env:
-          NODE_ENV: test
-          DATABASE_URL: postgres://test_user:test_password@127.0.0.1:5432/rupaya_test
-          REDIS_URL: redis://localhost:6379
-          JWT_SECRET: test_secret_min_32_chars_long
-          REFRESH_TOKEN_SECRET: test_refresh_min_32_chars_long
-          RUN_REMOTE_TESTS: "false"
-          DISABLE_TOKEN_CLEANUP: "true"
-        run: |
-          cd backend
-          npm test -- --coverage
-      
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          files: ./backend/coverage/coverage-final.json
-          flags: backend
-          name: backend-coverage
-          fail_ci_if_error: false
-      
-      - name: Comment PR with coverage
-        if: github.event_name == 'pull_request'
-        uses: romeovs/lcov-reporter-action@v0.3.1
-        with:
-          lcov-file: ./backend/coverage/lcov.info
+          echo "✅ Backend tests are run by Workflow 01 (Code Validation & Linting)"
+          echo "This workflow is available for future backend-specific CI additions"
