@@ -1,5 +1,5 @@
 // Rupaya iOS Application Entry Point
-// Build version: 1.0.0+1
+// Build version: 1.0.0+2
 import SwiftUI
 
 @main
