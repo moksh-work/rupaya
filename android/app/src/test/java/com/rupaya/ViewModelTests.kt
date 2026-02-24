@@ -1,7 +1,7 @@
 /**
  * Android Unit Tests
  * Minimal test suite for app compilation
- * Testing workflows 02 and 03 with enterprise security controls
+ * Testing workflows 02 and 03 with fixed path filters
  */
 
 package com.rupaya
@@ -31,5 +31,11 @@ class ExampleUnitTest {
     fun listOperations() {
         val numbers = listOf(1, 2, 3, 4, 5)
         assert(numbers.sum() == 15)
+    }
+
+    @Test
+    fun stringConcatenation() {
+        val result = "Hello" + " " + "World"
+        assert(result == "Hello World")
     }
 }
