@@ -1,6 +1,7 @@
 /**
  * Android Unit Tests
  * Minimal test suite for app compilation
+ * Testing workflows 02 and 03 with enterprise security controls
  */
 
 package com.rupaya
@@ -24,5 +25,11 @@ class ExampleUnitTest {
         val amount = 1234.56
         val formatted = String.format("%.2f", amount)
         assert(formatted == "1234.56")
+    }
+
+    @Test
+    fun listOperations() {
+        val numbers = listOf(1, 2, 3, 4, 5)
+        assert(numbers.sum() == 15)
     }
 }
