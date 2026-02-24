@@ -178,7 +178,7 @@ jobs:
 
       - name: Block static cloud credentials in workflows
         run: |
-          if grep -RInE "AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|GOOGLE_APPLICATION_CREDENTIALS|AZURE_CLIENT_SECRET" .github/workflows; then
+          if grep -RInE "(AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|GOOGLE_APPLICATION_CREDENTIALS|AZURE_CLIENT_SECRET)\s*:" .github/workflows; then
             echo "❌ Static cloud credentials pattern detected in workflow files"
             exit 1
           fi
