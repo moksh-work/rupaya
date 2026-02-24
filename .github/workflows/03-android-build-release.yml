@@ -35,6 +35,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     
     steps:
     - uses: actions/checkout@v4
@@ -61,12 +65,30 @@ jobs:
     - name: Build debug APK
       working-directory: ./android
       run: ./gradlew assembleDebug
+
+    - name: Generate Android SBOM
+      uses: anchore/sbom-action@v0
+      with:
+        path: ./android
+        format: cyclonedx-json
+        output-file: android-sbom.json
+
+    - name: Upload SBOM artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: android-sbom
+        path: android-sbom.json
     
     - name: Upload APK artifact
       uses: actions/upload-artifact@v4
       with:
         name: app-debug
         path: android/app/build/outputs/apk/debug/app-debug.apk
+
+    - name: Attest debug APK provenance
+      uses: actions/attest-build-provenance@v2
+      with:
+        subject-path: android/app/build/outputs/apk/debug/app-debug.apk
   
   release:
     needs: build

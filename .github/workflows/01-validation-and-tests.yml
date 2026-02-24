@@ -146,7 +146,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
@@ -167,6 +167,55 @@ jobs:
           else
             npm audit --audit-level=high || echo "⚠️ Vulnerabilities found - review before merge"
           fi
+
+  policy-guard:
+    name: Policy Guardrails
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Block static cloud credentials in workflows
+        run: |
+          if grep -RInE "AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|GOOGLE_APPLICATION_CREDENTIALS|AZURE_CLIENT_SECRET" .github/workflows; then
+            echo "❌ Static cloud credentials pattern detected in workflow files"
+            exit 1
+          fi
+          echo "✅ No static cloud credential patterns found"
+
+      - name: Block floating action refs
+        run: |
+          if grep -RInE "uses:\s*[^@]+@(master|main)$" .github/workflows; then
+            echo "❌ Floating action refs (main/master) are not allowed"
+            exit 1
+          fi
+          echo "✅ No floating action refs found"
+
+  sbom-backend:
+    name: SBOM (Backend)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Generate CycloneDX SBOM
+        run: |
+          cd backend
+          npm ci
+          npx --yes @cyclonedx/cyclonedx-npm --output-file ../backend-sbom.json --output-format json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-sbom
+          path: backend-sbom.json
 
   dependency-review:
     name: Dependency Review (PR)
@@ -232,7 +281,7 @@ jobs:
   # ========== FINAL STATUS ==========
   check-status:
     name: Check Overall Status
-    needs: [lint-and-quality, backend-tests, security-scan, dependency-review, build-check]
+    needs: [lint-and-quality, backend-tests, security-scan, dependency-review, policy-guard, sbom-backend, build-check]
     runs-on: ubuntu-latest
     if: always()
     timeout-minutes: 10
@@ -254,6 +303,14 @@ jobs:
           fi
           if [ "${{ needs.dependency-review.result }}" != "success" ] && [ "${{ needs.dependency-review.result }}" != "skipped" ]; then
             echo "❌ Dependency review failed"
+            exit 1
+          fi
+          if [ "${{ needs.policy-guard.result }}" != "success" ]; then
+            echo "❌ Policy guardrails failed"
+            exit 1
+          fi
+          if [ "${{ needs.sbom-backend.result }}" != "success" ]; then
+            echo "❌ SBOM generation failed"
             exit 1
           fi
           echo "✅ All checks passed"
