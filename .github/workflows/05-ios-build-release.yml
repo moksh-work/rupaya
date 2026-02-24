@@ -1,4 +1,4 @@
-name: 05 - iOS Build & Release
+name: 08 - iOS Build & Release (Manual/Disabled)
 
 # iOS build and release workflow
 # Triggers: manual dispatch (always available) + auto on feature/main when ios files change
