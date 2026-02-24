@@ -1,4 +1,4 @@
-name: 08 - Manual Deploy to Staging
+name: 10 - Manual Deploy to Staging
 
 # Workflow: Deploy backend to ECS (manual staging)
 

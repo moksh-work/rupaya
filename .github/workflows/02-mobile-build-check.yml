@@ -1,4 +1,4 @@
-name: 03 - Mobile Build Check
+name: 02 - Mobile Build Check
 
 on:
   push:
