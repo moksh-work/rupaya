@@ -10,9 +10,15 @@ on:
     branches:
       - main
       - feature/**
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
   pull_request:
     branches:
       - main
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -21,13 +27,13 @@ concurrency:
 permissions:
   contents: read
   actions: read
-  security-events: write
 
 jobs:
   # ========== LINTING & CODE QUALITY ==========
   lint-and-quality:
     name: Lint & Code Quality
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     
     steps:
       - uses: actions/checkout@v4
@@ -64,6 +70,7 @@ jobs:
   backend-tests:
     name: Backend Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     
     services:
       postgres:
@@ -130,6 +137,10 @@ jobs:
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
     
     steps:
       - uses: actions/checkout@v4
@@ -143,7 +154,6 @@ jobs:
           output: 'trivy-results.sarif'
 
       - name: Upload to GitHub Security
-        if: ${{ !env.ACT }}
         uses: github/codeql-action/upload-sarif@v4
         continue-on-error: true
         with:
@@ -152,12 +162,29 @@ jobs:
       - name: Dependency check
         run: |
           cd backend
-          npm audit --audit-level=moderate || echo "⚠️ Vulnerabilities found - review before merge"
+          if [[ "${{ github.event_name }}" == "pull_request" || "${{ github.ref }}" == "refs/heads/main" ]]; then
+            npm audit --audit-level=high
+          else
+            npm audit --audit-level=high || echo "⚠️ Vulnerabilities found - review before merge"
+          fi
+
+  dependency-review:
+    name: Dependency Review (PR)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dependency review
+        uses: actions/dependency-review-action@v4
 
   # ========== BUILD VERIFICATION ==========
   build-check:
     name: Build Verification
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     
     steps:
       - uses: actions/checkout@v4
@@ -177,6 +204,7 @@ jobs:
     name: Branch Validation
     runs-on: ubuntu-latest
     if: always()
+    timeout-minutes: 10
     
     steps:
       - uses: actions/checkout@v4
@@ -204,9 +232,10 @@ jobs:
   # ========== FINAL STATUS ==========
   check-status:
     name: Check Overall Status
-    needs: [lint-and-quality, backend-tests, security-scan, build-check]
+    needs: [lint-and-quality, backend-tests, security-scan, dependency-review, build-check]
     runs-on: ubuntu-latest
     if: always()
+    timeout-minutes: 10
     
     steps:
       - name: Determine job statuses
@@ -222,5 +251,9 @@ jobs:
           if [ "${{ needs.security-scan.result }}" != "success" ]; then
             echo "⚠️  Security scan warnings"
             # Don't fail on security warnings
+          fi
+          if [ "${{ needs.dependency-review.result }}" != "success" ] && [ "${{ needs.dependency-review.result }}" != "skipped" ]; then
+            echo "❌ Dependency review failed"
+            exit 1
           fi
           echo "✅ All checks passed"

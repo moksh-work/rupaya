@@ -9,12 +9,25 @@ on:
       # - 'ios/**'
       - 'android/**'
       - 'shared/**'
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
   pull_request:
     branches: [ main ]
     paths:
       # - 'ios/**'
       - 'android/**'
       - 'shared/**'
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   # ios-build:
@@ -61,6 +74,7 @@ jobs:
   android-build:
     name: Android Build & Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     
     steps:
       - uses: actions/checkout@v4
