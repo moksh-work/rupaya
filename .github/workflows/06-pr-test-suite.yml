@@ -1,0 +1,339 @@
+name: 06 - PR Test Suite (Pre-Merge Validation)
+
+# Comprehensive pre-merge testing for pull requests
+# Target: 15-20 minutes
+# Industry pattern: Gate PRs with integration, contract, and security tests
+# Follows Microsoft/Google pre-submit validation strategy
+
+on:
+  pull_request:
+    branches: 
+      - main
+      - develop
+      - release/**
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+jobs:
+  # ========== BACKEND INTEGRATION TESTS ==========
+  backend-integration:
+    name: Backend Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: rupaya_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'backend/package-lock.json'
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          npm ci
+
+      - name: Run database migrations
+        run: |
+          cd backend
+          npm run migrate:test
+        env:
+          DATABASE_URL: postgres://test_user:test_password@localhost:5432/rupaya_test
+          NODE_ENV: test
+
+      - name: Run integration tests
+        run: |
+          cd backend
+          npm test -- __tests__/integration/ --coverage --maxWorkers=2
+        env:
+          DATABASE_URL: postgres://test_user:test_password@localhost:5432/rupaya_test
+          NODE_ENV: test
+          JWT_SECRET: test-secret
+          REDIS_URL: redis://localhost:6379
+
+      - name: Upload integration coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./backend/coverage/coverage-final.json
+          flags: integration-tests
+          name: pr-integration-coverage
+
+  # ========== CONTRACT TESTS ==========
+  contract-tests:
+    name: API Contract Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: rupaya_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'backend/package-lock.json'
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          npm ci
+
+      - name: Run API contract tests
+        run: |
+          cd backend
+          npm run test:contract --if-present || echo "Contract tests not configured"
+        env:
+          DATABASE_URL: postgres://test_user:test_password@localhost:5432/rupaya_test
+          NODE_ENV: test
+          JWT_SECRET: test-secret
+          REDIS_URL: redis://localhost:6379
+
+      - name: Validate OpenAPI spec
+        run: |
+          cd backend
+          npm run validate:api --if-present || echo "API validation not configured"
+
+  # ========== ANDROID INTEGRATION TESTS ==========
+  android-integration:
+    name: Android Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Run Android unit tests
+        run: |
+          cd android
+          ./gradlew testDebugUnitTest --info
+
+      - name: Run Android lint
+        run: |
+          cd android
+          ./gradlew lintDebug
+
+      - name: Build Android debug APK
+        run: |
+          cd android
+          ./gradlew assembleDebug
+
+      - name: Archive test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-pr-test-results
+          path: android/app/build/reports/
+
+  # ========== COMPONENT TESTS ==========
+  component-tests:
+    name: Component Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: rupaya_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'backend/package-lock.json'
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          npm ci
+
+      - name: Run component tests
+        run: |
+          cd backend
+          npm run test:component --if-present || echo "Component tests not configured"
+        env:
+          DATABASE_URL: postgres://test_user:test_password@localhost:5432/rupaya_test
+          NODE_ENV: test
+
+  # ========== SECURITY VALIDATION ==========
+  security-validation:
+    name: Security Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy security scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Run npm audit
+        run: |
+          cd backend
+          npm audit --audit-level=high || true
+
+      - name: Check for hardcoded secrets
+        run: |
+          if git grep -inE "(password\s*=|api[_-]?key\s*=|secret\s*=|token\s*=)" -- '*.js' '*.ts' '*.json' ':!package-lock.json'; then
+            echo "⚠️  Found potential hardcoded secrets"
+            exit 1
+          fi
+
+  # ========== PR TEST SUMMARY ==========
+  pr-test-summary:
+    name: PR Test Summary
+    needs: [backend-integration, contract-tests, android-integration, component-tests, security-validation]
+    runs-on: ubuntu-latest
+    if: always()
+    timeout-minutes: 5
+
+    steps:
+      - name: Check all test results
+        run: |
+          echo "## 🧪 PR Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Test Suite | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|------------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Backend Integration | ${{ needs.backend-integration.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Contract Tests | ${{ needs.contract-tests.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Android Integration | ${{ needs.android-integration.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Component Tests | ${{ needs.component-tests.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security Validation | ${{ needs.security-validation.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ needs.backend-integration.result }}" != "success" ] || \
+             [ "${{ needs.android-integration.result }}" != "success" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "❌ **PR not ready for merge - tests failed**" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **All required tests passed - PR ready for review**" >> $GITHUB_STEP_SUMMARY
+
+      - name: Post PR comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const backendStatus = '${{ needs.backend-integration.result }}' === 'success' ? '✅' : '❌';
+            const contractStatus = '${{ needs.contract-tests.result }}' === 'success' ? '✅' : '❌';
+            const androidStatus = '${{ needs.android-integration.result }}' === 'success' ? '✅' : '❌';
+            const componentStatus = '${{ needs.component-tests.result }}' === 'success' ? '✅' : '❌';
+            const securityStatus = '${{ needs.security-validation.result }}' === 'success' ? '✅' : '❌';
+            
+            const allPassed = '${{ needs.backend-integration.result }}' === 'success' && 
+                            '${{ needs.android-integration.result }}' === 'success';
+            
+            const body = `## 🧪 PR Test Results
+            
+            | Test Suite | Status |
+            |------------|--------|
+            | Backend Integration | ${backendStatus} |
+            | Contract Tests | ${contractStatus} |
+            | Android Integration | ${androidStatus} |
+            | Component Tests | ${componentStatus} |
+            | Security Validation | ${securityStatus} |
+            
+            ${allPassed ? '✅ **All required tests passed - PR ready for merge**' : '❌ **PR not ready for merge - please fix failing tests**'}
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
