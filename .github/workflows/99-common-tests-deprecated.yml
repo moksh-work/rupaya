@@ -1,17 +1,15 @@
-name: 05 - Comprehensive Test Suite (PR & Main)
+name: 99 - Common Tests (DEPRECATED)
 
-# Industry-level comprehensive testing following test pyramid
-# PR phase: Integration, contract, component tests (15-30 min)
-# Main phase: Full E2E, performance, load tests (30-60 min)
-# Does NOT run on feature branches (use workflow 01 for fast feedback)
-# Follows Netflix/Amazon pattern: comprehensive tests pre-merge and post-merge
+# ⚠️  DEPRECATED: This workflow has been split into separate workflows
+# Use instead:
+#   - Workflow 06: PR Test Suite (pre-merge validation)
+#   - Workflow 07: Release Test Suite (pre-production validation)
+#   - Workflow 08: Main Test Suite (post-merge validation)
+#
+# This file is kept for reference only and will be removed in future
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-  workflow_dispatch:
+  workflow_dispatch:  # Manual trigger only
 
 jobs:
   backend-tests:

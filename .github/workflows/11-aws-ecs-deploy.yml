@@ -1,4 +1,4 @@
-name: 09 - ECS Deploy
+name: 11 - ECS Deploy
 
 # Manual-only deployment workflow
 # Prevents accidental auto-deployments from any branch

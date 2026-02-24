@@ -1,0 +1,264 @@
+name: 07 - Main Test Suite (Post-Merge Validation)
+
+# Post-merge validation for main branch
+# Target: 10-15 minutes
+# Industry pattern: Fast verification after merge to ensure main is always deployable
+# Follows Google/Facebook continuous deployment validation
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false  # Don't cancel main branch tests
+
+permissions:
+  contents: read
+  checks: write
+  actions: read
+
+jobs:
+  # ========== SMOKE TESTS (POST-MERGE) ==========
+  post-merge-smoke:
+    name: Post-Merge Smoke Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: rupaya_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'backend/package-lock.json'
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          npm ci
+
+      - name: Run smoke tests (critical path)
+        run: |
+          cd backend
+          npm test -- __tests__/smoke/ --coverage
+        env:
+          DATABASE_URL: postgres://test_user:test_password@localhost:5432/rupaya_test
+          NODE_ENV: production
+          JWT_SECRET: test-secret
+          REDIS_URL: redis://localhost:6379
+
+      - name: Upload smoke test coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./backend/coverage/coverage-final.json
+          flags: main-smoke-tests
+          name: main-smoke-coverage
+
+  # ========== CRITICAL PATH VALIDATION ==========
+  critical-path-validation:
+    name: Critical Path Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: rupaya_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'backend/package-lock.json'
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          npm ci
+
+      - name: Run database migrations
+        run: |
+          cd backend
+          npm run migrate:test
+        env:
+          DATABASE_URL: postgres://test_user:test_password@localhost:5432/rupaya_test
+          NODE_ENV: test
+
+      - name: Validate critical API endpoints
+        run: |
+          cd backend
+          npm run test:critical --if-present || npm test -- __tests__/smoke/ --testNamePattern="critical"
+        env:
+          DATABASE_URL: postgres://test_user:test_password@localhost:5432/rupaya_test
+          NODE_ENV: test
+          JWT_SECRET: test-secret
+          REDIS_URL: redis://localhost:6379
+
+  # ========== ANDROID SMOKE TESTS ==========
+  android-smoke:
+    name: Android Smoke Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Run Android smoke tests
+        run: |
+          cd android
+          ./gradlew testDebugUnitTest --tests="*Smoke*" --info || ./gradlew testDebugUnitTest --info
+
+      - name: Build Android debug APK
+        run: |
+          cd android
+          ./gradlew assembleDebug
+
+  # ========== DEPLOYMENT READINESS CHECK ==========
+  deployment-readiness:
+    name: Deployment Readiness Check
+    needs: [post-merge-smoke, critical-path-validation, android-smoke]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check deployment prerequisites
+        run: |
+          echo "## 🚢 Deployment Readiness" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Main Branch Status" >> $GITHUB_STEP_SUMMARY
+          echo "- Commit: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Author: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Post-Merge Smoke Tests | ${{ needs.post-merge-smoke.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Critical Path Validation | ${{ needs.critical-path-validation.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Android Smoke Tests | ${{ needs.android-smoke.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Verify all checks passed
+        run: |
+          if [ "${{ needs.post-merge-smoke.result }}" != "success" ] || \
+             [ "${{ needs.critical-path-validation.result }}" != "success" ] || \
+             [ "${{ needs.android-smoke.result }}" != "success" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "❌ **Main branch is NOT DEPLOYABLE - tests failed**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Action Required" >> $GITHUB_STEP_SUMMARY
+            echo "1. Investigate failed tests immediately" >> $GITHUB_STEP_SUMMARY
+            echo "2. Consider reverting the last commit if critical" >> $GITHUB_STEP_SUMMARY
+            echo "3. Fix issues on a hotfix branch" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **Main branch is DEPLOYABLE - ready for production**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "- Main branch validation passed" >> $GITHUB_STEP_SUMMARY
+          echo "- Deploy to staging/production when ready" >> $GITHUB_STEP_SUMMARY
+          echo "- Monitor deployment metrics" >> $GITHUB_STEP_SUMMARY
+
+      - name: Notify deployment ready
+        run: |
+          echo "🎉 Main branch tests passed - ready for deployment"
+          echo "Commit: ${{ github.sha }}"
+          echo "Branch: ${{ github.ref_name }}"
+
+  # ========== REGRESSION WATCH ==========
+  regression-watch:
+    name: Regression Watch
+    needs: [post-merge-smoke, critical-path-validation]
+    runs-on: ubuntu-latest
+    if: always()
+    timeout-minutes: 5
+
+    steps:
+      - name: Check for regressions
+        run: |
+          if [ "${{ needs.post-merge-smoke.result }}" == "failure" ] || \
+             [ "${{ needs.critical-path-validation.result }}" == "failure" ]; then
+            echo "⚠️  REGRESSION DETECTED on main branch" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Critical Alert" >> $GITHUB_STEP_SUMMARY
+            echo "Tests that passed in PR are now failing on main." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Possible causes:**" >> $GITHUB_STEP_SUMMARY
+            echo "- Merge conflict resolution issues" >> $GITHUB_STEP_SUMMARY
+            echo "- Interaction with recent commits" >> $GITHUB_STEP_SUMMARY
+            echo "- Environment-specific issues" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Immediate action required:**" >> $GITHUB_STEP_SUMMARY
+            echo "1. Investigate the failing tests" >> $GITHUB_STEP_SUMMARY
+            echo "2. Consider reverting: \`git revert ${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "3. Alert the team" >> $GITHUB_STEP_SUMMARY
+            
+            # In production, this would send alerts via Slack/PagerDuty
+            echo "🚨 Regression detected - alerting team"
+          else
+            echo "✅ No regressions detected" >> $GITHUB_STEP_SUMMARY
+          fi

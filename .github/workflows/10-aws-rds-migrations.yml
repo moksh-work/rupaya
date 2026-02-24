@@ -1,4 +1,4 @@
-name: 08 - RDS Database Migrations
+name: 10 - RDS Database Migrations
 
 # This workflow runs after infrastructure is deployed
 # Validates and applies database migrations
