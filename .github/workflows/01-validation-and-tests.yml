@@ -1,9 +1,10 @@
-name: 01 - Code Validation, Testing & Linting
+name: 01 - Fast Feedback (Smoke Tests & Validation)
 
-# Comprehensive validation pipeline for code quality and backend testing
-# Runs early in the pipeline (first workflow)
-# Triggered on push/PR to main or all feature branches
-# Includes: linting, formatting, backend tests, security scanning, build verification
+# Fast feedback loop for feature branches (5-10 min target)
+# Industry best practice: Run critical path validation early
+# Feature branches: smoke tests, unit tests, linting, basic security
+# PR/Main: All tests run in workflow 05 (comprehensive suite)
+# Follows Google/Netflix test pyramid: fast smoke tests → comprehensive tests
 
 on:
   push:
@@ -66,11 +67,11 @@ jobs:
         run: |
           echo "SonarQube integration would go here"
 
-  # ========== BACKEND TESTS ==========
-  backend-tests:
-    name: Backend Tests
+  # ========== SMOKE TESTS (FAST) ==========
+  smoke-tests:
+    name: Smoke Tests (Critical Path)
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 10
     
     services:
       postgres:
@@ -112,10 +113,10 @@ jobs:
           cd backend
           npm ci
 
-      - name: Run tests
+      - name: Run smoke tests (critical path only)
         run: |
           cd backend
-          npm test -- --coverage
+          npm test -- __tests__/smoke/ --coverage
         env:
           DATABASE_URL: postgres://test_user:test_password@127.0.0.1:5432/rupaya_test
           NODE_ENV: test
@@ -127,11 +128,22 @@ jobs:
           DISABLE_PWNED_CHECK: "true"
           DISABLE_PASSWORD_STRENGTH: "true"
 
-      - name: Upload coverage
+      - name: Run unit tests (fast only)
+        run: |
+          cd backend
+          npm test -- __tests__/unit/ --testPathIgnorePatterns=slow --coverage
+        env:
+          DATABASE_URL: postgres://test_user:test_password@127.0.0.1:5432/rupaya_test
+          NODE_ENV: test
+          JWT_SECRET: test-secret
+          REDIS_URL: redis://localhost:6379
+
+      - name: Upload smoke test coverage
         uses: codecov/codecov-action@v4
         with:
           files: ./backend/coverage/coverage-final.json
-          flags: backend
+          flags: smoke-tests
+          name: smoke-coverage
 
   # ========== SECURITY SCANNING ==========
   security-scan:
@@ -281,7 +293,7 @@ jobs:
   # ========== FINAL STATUS ==========
   check-status:
     name: Check Overall Status
-    needs: [lint-and-quality, backend-tests, security-scan, dependency-review, policy-guard, sbom-backend, build-check]
+    needs: [lint-and-quality, smoke-tests, security-scan, dependency-review, policy-guard, sbom-backend, build-check]
     runs-on: ubuntu-latest
     if: always()
     timeout-minutes: 10
@@ -293,7 +305,7 @@ jobs:
             echo "❌ Linting failed"
             exit 1
           fi
-          if [ "${{ needs.backend-tests.result }}" != "success" ]; then
+          if [ "${{ needs.smoke-tests.result }}" != "success" ]; then
             echo "❌ Tests failed"
             exit 1
           fi

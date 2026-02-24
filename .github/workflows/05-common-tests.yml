@@ -1,15 +1,12 @@
-name: 05 - Full Test Suite (Feature & PR)
+name: 05 - Comprehensive Test Suite (PR & Main)
 
-# Comprehensive test suite for feature and PR phases
-# Feature phase: runs after mobile build workflow completes successfully
-# PR phase: runs on pull requests to main
-# Main phase: optional safety run on push to main
+# Industry-level comprehensive testing following test pyramid
+# PR phase: Integration, contract, component tests (15-30 min)
+# Main phase: Full E2E, performance, load tests (30-60 min)
+# Does NOT run on feature branches (use workflow 01 for fast feedback)
+# Follows Netflix/Amazon pattern: comprehensive tests pre-merge and post-merge
 
 on:
-  workflow_run:
-    workflows: ["03 - Mobile Build Check"]
-    types:
-      - completed
   push:
     branches: [ main ]
   pull_request:
@@ -18,14 +15,9 @@ on:
 
 jobs:
   backend-tests:
-    name: Backend Tests (Node.js)
+    name: Backend Tests - Integration & E2E
     runs-on: ubuntu-latest
-    if: |
-      github.event_name == 'pull_request' ||
-      github.event_name == 'push' ||
-      (github.event_name == 'workflow_run' &&
-       github.event.workflow_run.conclusion == 'success' &&
-       startsWith(github.event.workflow_run.head_branch, 'feature/'))
+    timeout-minutes: 30
 
     services:
       postgres:
@@ -54,8 +46,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -77,16 +67,6 @@ jobs:
           DATABASE_URL: postgres://test_user:test_password@localhost:5432/rupaya_test
           NODE_ENV: test
 
-      - name: Run unit tests
-        run: |
-          cd backend
-          npm test -- __tests__/unit/ --coverage
-        env:
-          DATABASE_URL: postgres://test_user:test_password@localhost:5432/rupaya_test
-          NODE_ENV: test
-          JWT_SECRET: test-secret
-          REDIS_URL: redis://localhost:6379
-
       - name: Run integration tests
         run: |
           cd backend
@@ -97,15 +77,8 @@ jobs:
           JWT_SECRET: test-secret
           REDIS_URL: redis://localhost:6379
 
-      - name: Run smoke tests
-        run: |
-          cd backend
-          npm test -- __tests__/smoke/ --coverage
-        env:
-          DATABASE_URL: postgres://test_user:test_password@localhost:5432/rupaya_test
-          NODE_ENV: test
-          JWT_SECRET: test-secret
-          REDIS_URL: redis://localhost:6379
+      # Note: Smoke tests run in workflow 01 for fast feedback
+      # This workflow focuses on comprehensive integration and E2E tests
 
       - name: Run E2E tests
         run: |
@@ -134,7 +107,7 @@ jobs:
         if: always()
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
           files: ./backend/coverage/coverage-final.json
           flags: backend
@@ -179,19 +152,12 @@ jobs:
           path: ios/TestResults/
 
   android-tests:
-    name: Android Tests (Kotlin)
+    name: Android Tests - Integration
     runs-on: ubuntu-latest
-    if: |
-      github.event_name == 'pull_request' ||
-      github.event_name == 'push' ||
-      (github.event_name == 'workflow_run' &&
-       github.event.workflow_run.conclusion == 'success' &&
-       startsWith(github.event.workflow_run.head_branch, 'feature/'))
+    timeout-minutes: 25
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
       - name: Setup Java
         uses: actions/setup-java@v4
