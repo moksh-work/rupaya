@@ -38,15 +38,17 @@ jobs:
           if [[ "$ENV" == "production" ]]; then
             echo "cluster=rupaya-ecs" >> $GITHUB_OUTPUT
             echo "service=rupaya-backend" >> $GITHUB_OUTPUT
+            echo "role_arn=${{ secrets.AWS_OIDC_ROLE_ARN_PROD }}" >> $GITHUB_OUTPUT
           else
             echo "cluster=rupaya-ecs-staging" >> $GITHUB_OUTPUT
             echo "service=rupaya-backend-staging" >> $GITHUB_OUTPUT
+            echo "role_arn=${{ secrets.AWS_OIDC_ROLE_ARN_STAGING }}" >> $GITHUB_OUTPUT
           fi
 
       - name: Configure AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          role-to-assume: ${{ steps.env.outputs.role_arn }}
           aws-region: us-east-1
 
       - name: Deploy

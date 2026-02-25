@@ -42,7 +42,6 @@ concurrency:
 env:
   TF_IN_AUTOMATION: "true"
   AWS_REGION: "us-east-1"
-  AWS_ROLE_ARN: ${{ secrets.AWS_OIDC_ROLE_ARN }}
   TFSTATE_BUCKET: ${{ secrets.TFSTATE_BUCKET_NAME }}
   TFSTATE_DYNAMODB_TABLE: "rupaya-terraform-state-lock"
 
@@ -56,6 +55,7 @@ jobs:
       auto_apply: ${{ steps.env.outputs.auto_apply }}
       tfstate_key: ${{ steps.env.outputs.tfstate_key }}
       should_deploy: ${{ steps.env.outputs.should_deploy }}
+      aws_role_arn: ${{ steps.env.outputs.aws_role_arn }}
     steps:
       - name: Determine environment
         id: env
@@ -82,10 +82,18 @@ jobs:
           
           TFSTATE_KEY="${ENVIRONMENT}/infrastructure/terraform.tfstate"
           
+          # Set appropriate OIDC role based on environment
+          if [ "${ENVIRONMENT}" = "production" ]; then
+            AWS_ROLE_ARN="${{ secrets.AWS_OIDC_ROLE_ARN_PROD }}"
+          else
+            AWS_ROLE_ARN="${{ secrets.AWS_OIDC_ROLE_ARN_STAGING }}"
+          fi
+          
           echo "environment=${ENVIRONMENT}" >> "$GITHUB_OUTPUT"
           echo "auto_apply=${AUTO_APPLY}" >> "$GITHUB_OUTPUT"
           echo "tfstate_key=${TFSTATE_KEY}" >> "$GITHUB_OUTPUT"
           echo "should_deploy=${SHOULD_DEPLOY}" >> "$GITHUB_OUTPUT"
+          echo "aws_role_arn=${AWS_ROLE_ARN}" >> "$GITHUB_OUTPUT"
           
           echo "Branch: ${{ github.ref }}"
           echo "Event: ${{ github.event_name }}"
@@ -114,7 +122,7 @@ jobs:
       - name: Configure AWS Credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          role-to-assume: ${{ needs.setup.outputs.aws_role_arn }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Verify remote state backend
@@ -187,7 +195,7 @@ jobs:
       - name: Configure AWS Credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          role-to-assume: ${{ needs.setup.outputs.aws_role_arn }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Verify remote state backend
