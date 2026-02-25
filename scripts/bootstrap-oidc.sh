@@ -33,6 +33,7 @@ set -e
 
 AUTO_APPROVE=false
 ENV_ARG=""
+DESTROY_MODE=false
 
 # ============================================================================
 # Help & Usage
@@ -44,7 +45,7 @@ AWS OIDC Bootstrap Script - GitHub Actions Authentication
 
 DESCRIPTION
     Automates secure AWS authentication for GitHub Actions using OIDC federation.
-    Creates IAM roles per environment (dev, staging, prod) without storing credentials.
+    Creates or destroys IAM roles per environment (dev, staging, prod) without storing credentials.
 
 USAGE
     ./scripts/bootstrap-oidc.sh [options]
@@ -53,8 +54,10 @@ OPTIONS
     -h, --help          Show this help message and exit
     --env ENV           Environment: development, staging, production, or all
                         (skips interactive prompt)
-    --auto-approve      Skip terraform apply confirmation
+    --auto-approve      Skip terraform apply/destroy confirmation
                         (use with caution in automation)
+    --destroy           Delete OIDC roles and secrets instead of creating them
+                        (requires explicit confirmation for safety)
 
 WHAT THIS SCRIPT DOES
     1. Checks prerequisites (AWS CLI, Terraform, GitHub CLI)
@@ -88,6 +91,15 @@ EXAMPLES
 
     # Non-interactive: create all roles
     ./scripts/bootstrap-oidc.sh --env=all --auto-approve
+
+    # Interactive destroy
+    ./scripts/bootstrap-oidc.sh --destroy
+
+    # Non-interactive: destroy dev role only
+    ./scripts/bootstrap-oidc.sh --destroy --env=development --auto-approve
+
+    # Non-interactive: destroy all roles
+    ./scripts/bootstrap-oidc.sh --destroy --env=all --auto-approve
 
 ENVIRONMENT SELECTION
     During execution, you'll choose which environment(s) to deploy:
@@ -136,6 +148,10 @@ parse_arguments() {
                 ;;
             --auto-approve)
                 AUTO_APPROVE=true
+                shift
+                ;;
+            --destroy)
+                DESTROY_MODE=true
                 shift
                 ;;
             *)
@@ -375,6 +391,148 @@ get_aws_account_id() {
     else
         aws sts get-caller-identity | grep -oP '(?<="Account": ")[^"]*'
     fi
+}
+
+# ============================================================================
+# Terraform Destroy
+# ============================================================================
+
+destroy_terraform() {
+    log_warn "⚠️  DESTROYING AWS IAM OIDC role(s)..."
+    echo ""
+    
+    if [ ! -f "infra/aws/terraform/aws-oidc-role.tf" ]; then
+        log_error "File not found: infra/aws/terraform/aws-oidc-role.tf"
+        exit 1
+    fi
+    
+    cd infra/aws/terraform
+    
+    log_info "Running terraform init..."
+    terraform init
+    
+    # Build terraform targets based on selected environment
+    local targets="-target=aws_iam_openid_connect_provider.github"
+    
+    if [ "$DEPLOY_ENVIRONMENTS" = "all" ]; then
+        targets="$targets -target=aws_iam_role.github_oidc -target=aws_iam_role_policy.github_oidc_inline"
+    else
+        targets="$targets -target=aws_iam_role.github_oidc[\"$DEPLOY_ENVIRONMENTS\"] -target=aws_iam_role_policy.github_oidc_inline[\"$DEPLOY_ENVIRONMENTS\"]"
+    fi
+    
+    log_info "Running terraform plan -destroy for: $DEPLOY_ENVIRONMENTS..."
+    terraform plan \
+        -destroy \
+        $targets \
+        -var="github_org=$GITHUB_ORG" \
+        -out=tfplan.destroy
+    
+    echo ""
+    log_warn "==========================================="
+    log_warn "⚠️  RESOURCES TO BE DELETED:"
+    log_warn "==========================================="
+    
+    if [ "$DEPLOY_ENVIRONMENTS" = "all" ] || [ "$DEPLOY_ENVIRONMENTS" = "development" ]; then
+        echo "  - rupaya-github-oidc-dev (IAM role)"
+    fi
+    
+    if [ "$DEPLOY_ENVIRONMENTS" = "all" ] || [ "$DEPLOY_ENVIRONMENTS" = "staging" ]; then
+        echo "  - rupaya-github-oidc-staging (IAM role)"
+    fi
+    
+    if [ "$DEPLOY_ENVIRONMENTS" = "all" ] || [ "$DEPLOY_ENVIRONMENTS" = "production" ]; then
+        echo "  - rupaya-github-oidc-prod (IAM role)"
+    fi
+    
+    if [ "$DEPLOY_ENVIRONMENTS" = "all" ]; then
+        echo "  - GitHub OIDC provider (token.actions.githubusercontent.com)"
+    fi
+    
+    echo ""
+    log_warn "==========================================="
+    echo ""
+    
+    # Safety confirmation
+    if [ "$AUTO_APPROVE" = true ]; then
+        log_warn "Auto-approving terraform destroy (--auto-approve flag set)"
+        log_warn "Proceeding in 3 seconds..."
+        sleep 3
+    else
+        # Require explicit environment name for production
+        if [ "$DEPLOY_ENVIRONMENTS" = "production" ] || [ "$DEPLOY_ENVIRONMENTS" = "all" ]; then
+            log_warn "⚠️  YOU ARE ABOUT TO DELETE PRODUCTION RESOURCES!"
+            echo ""
+            read -p "Type the environment name '$DEPLOY_ENVIRONMENTS' to confirm: " confirm_env
+            if [[ "$confirm_env" != "$DEPLOY_ENVIRONMENTS" ]]; then
+                log_error "Environment name mismatch. Destroy cancelled."
+                rm -f tfplan.destroy
+                cd - > /dev/null
+                exit 1
+            fi
+        fi
+        
+        read -p "Type 'yes' to confirm destruction: " confirm
+        if [[ "$confirm" != "yes" ]]; then
+            log_warn "Terraform destroy cancelled"
+            rm -f tfplan.destroy
+            cd - > /dev/null
+            exit 1
+        fi
+    fi
+    
+    log_info "Destroying Terraform resources..."
+    terraform apply tfplan.destroy
+    
+    log_success "IAM role(s) destroyed successfully"
+    
+    # Clean up plan file
+    rm -f tfplan.destroy
+    
+    cd - > /dev/null
+    echo ""
+}
+
+# ============================================================================
+# Delete GitHub Secrets
+# ============================================================================
+
+delete_github_secrets() {
+    log_info "Deleting GitHub repository secret(s) for selected environment(s)..."
+    
+    # Development secret
+    if [ "$DEPLOY_ENVIRONMENTS" = "all" ] || [ "$DEPLOY_ENVIRONMENTS" = "development" ]; then
+        log_info "Deleting AWS_OIDC_ROLE_ARN_DEV..."
+        if gh secret list --repo "$GITHUB_ORG/$GITHUB_REPO" 2>/dev/null | grep -q AWS_OIDC_ROLE_ARN_DEV; then
+            gh secret delete AWS_OIDC_ROLE_ARN_DEV --repo "$GITHUB_ORG/$GITHUB_REPO" 2>/dev/null || true
+            log_success "AWS_OIDC_ROLE_ARN_DEV deleted"
+        else
+            log_warn "Secret AWS_OIDC_ROLE_ARN_DEV not found (already deleted?)"
+        fi
+    fi
+    
+    # Staging secret
+    if [ "$DEPLOY_ENVIRONMENTS" = "all" ] || [ "$DEPLOY_ENVIRONMENTS" = "staging" ]; then
+        log_info "Deleting AWS_OIDC_ROLE_ARN_STAGING..."
+        if gh secret list --repo "$GITHUB_ORG/$GITHUB_REPO" 2>/dev/null | grep -q AWS_OIDC_ROLE_ARN_STAGING; then
+            gh secret delete AWS_OIDC_ROLE_ARN_STAGING --repo "$GITHUB_ORG/$GITHUB_REPO" 2>/dev/null || true
+            log_success "AWS_OIDC_ROLE_ARN_STAGING deleted"
+        else
+            log_warn "Secret AWS_OIDC_ROLE_ARN_STAGING not found (already deleted?)"
+        fi
+    fi
+    
+    # Production secret
+    if [ "$DEPLOY_ENVIRONMENTS" = "all" ] || [ "$DEPLOY_ENVIRONMENTS" = "production" ]; then
+        log_info "Deleting AWS_OIDC_ROLE_ARN_PROD..."
+        if gh secret list --repo "$GITHUB_ORG/$GITHUB_REPO" 2>/dev/null | grep -q AWS_OIDC_ROLE_ARN_PROD; then
+            gh secret delete AWS_OIDC_ROLE_ARN_PROD --repo "$GITHUB_ORG/$GITHUB_REPO" 2>/dev/null || true
+            log_success "AWS_OIDC_ROLE_ARN_PROD deleted"
+        else
+            log_warn "Secret AWS_OIDC_ROLE_ARN_PROD not found (already deleted?)"
+        fi
+    fi
+    
+    echo ""
 }
 
 # ============================================================================
@@ -660,14 +818,65 @@ print_summary() {
 }
 
 # ============================================================================
+# Print Destroy Summary
+# ============================================================================
+
+print_destroy_summary() {
+    log_success "==========================================="
+    log_success "✅ OIDC Cleanup Complete"
+    log_success "==========================================="
+    echo ""
+    
+    log_info "Resources Deleted:"
+    
+    if [ "$DEPLOY_ENVIRONMENTS" = "all" ] || [ "$DEPLOY_ENVIRONMENTS" = "development" ]; then
+        echo "  ✓ IAM Role: rupaya-github-oidc-dev"
+        echo "  ✓ GitHub Secret: AWS_OIDC_ROLE_ARN_DEV"
+    fi
+    
+    if [ "$DEPLOY_ENVIRONMENTS" = "all" ] || [ "$DEPLOY_ENVIRONMENTS" = "staging" ]; then
+        echo "  ✓ IAM Role: rupaya-github-oidc-staging"
+        echo "  ✓ GitHub Secret: AWS_OIDC_ROLE_ARN_STAGING"
+    fi
+    
+    if [ "$DEPLOY_ENVIRONMENTS" = "all" ] || [ "$DEPLOY_ENVIRONMENTS" = "production" ]; then
+        echo "  ✓ IAM Role: rupaya-github-oidc-prod"
+        echo "  ✓ GitHub Secret: AWS_OIDC_ROLE_ARN_PROD"
+    fi
+    
+    if [ "$DEPLOY_ENVIRONMENTS" = "all" ]; then
+        echo "  ✓ OIDC Provider: token.actions.githubusercontent.com"
+    fi
+    
+    echo ""
+    log_warn "Manual Cleanup (if needed):"
+    echo "  1. Delete GitHub environments (development/staging/production) via:"
+    echo "     https://github.com/$GITHUB_ORG/$GITHUB_REPO/settings/environments"
+    echo ""
+    echo "  2. Review any remaining IAM resources:"
+    echo "     aws iam list-roles | grep github-oidc"
+    echo ""
+    log_info "Note: Workflows will fail until OIDC is re-created."
+    echo "==========================================="
+    echo ""
+}
+
+# ============================================================================
 # Main Execution
 # ============================================================================
 
 main() {
     clear
-    echo "=========================================="
-    log_info "AWS OIDC Bootstrap for GitHub Actions"
-    echo "=========================================="
+    
+    if [ "$DESTROY_MODE" = true ]; then
+        echo "=========================================="
+        log_warn "AWS OIDC Destroy - GitHub Actions"
+        echo "=========================================="
+    else
+        echo "=========================================="
+        log_info "AWS OIDC Bootstrap for GitHub Actions"
+        echo "=========================================="
+    fi
     echo ""
     
     parse_arguments "$@"
@@ -678,11 +887,19 @@ main() {
     detect_github_org_repo
     select_environment
     
-    apply_terraform
-    create_github_secret
-    create_github_environments
-    test_oidc_auth
-    print_summary
+    if [ "$DESTROY_MODE" = true ]; then
+        # Destroy mode
+        destroy_terraform
+        delete_github_secrets
+        print_destroy_summary
+    else
+        # Create mode (default)
+        apply_terraform
+        create_github_secret
+        create_github_environments
+        test_oidc_auth
+        print_summary
+    fi
 }
 
 # Run main if not sourced
