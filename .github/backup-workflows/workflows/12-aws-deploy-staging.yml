@@ -1,0 +1,249 @@
+name: 12 - Manual Deploy to Staging
+
+# Workflow: Deploy backend to ECS (manual staging)
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment"
+        required: true
+        default: staging
+
+concurrency:
+  group: deploy-staging-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-1
+  AWS_ROLE_ARN: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+  ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
+  ECS_CLUSTER_NAME: "rupaya-ecs-staging"
+  ECS_SERVICE_NAME: "rupaya-backend-staging"
+
+jobs:
+  # ========== VALIDATION ==========
+  validate:
+    name: Validate & Test
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: rupaya_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'backend/package-lock.json'
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          npm ci
+
+      - name: Lint code
+        run: |
+          cd backend
+          npm run lint 2>/dev/null || true
+
+      - name: Run tests
+        run: |
+          cd backend
+          npm test -- --coverage
+        env:
+          DATABASE_URL: postgres://test_user:test_password@localhost:5432/rupaya_test
+          NODE_ENV: test
+          JWT_SECRET: test-secret
+
+  # ========== BUILD IMAGE ==========
+  build-image:
+    name: Build Docker Image
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    
+    outputs:
+      image-tag: ${{ steps.image.outputs.tag }}
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Generate image tag
+        id: image
+        run: |
+          COMMIT_SHA=${{ github.sha }}
+          SHORT_SHA=${COMMIT_SHA:0:7}
+          TAG="staging-${SHORT_SHA}-$(date +%s)"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: |
+            ${{ env.ECR_REGISTRY }}/rupaya-backend:${{ steps.image.outputs.tag }}
+            ${{ env.ECR_REGISTRY }}/rupaya-backend:staging-latest
+          cache-from: type=registry,ref=${{ env.ECR_REGISTRY }}/rupaya-backend:buildcache
+          cache-to: type=registry,ref=${{ env.ECR_REGISTRY }}/rupaya-backend:buildcache,mode=max
+          platforms: linux/amd64
+
+  # ========== DEPLOY TO STAGING ==========
+  deploy-staging:
+    name: Deploy to ECS (Staging)
+    needs: build-image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    environment:
+      name: staging
+      url: https://staging-api.rupaya.com
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update ECS task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition rupaya-backend-staging \
+            --query taskDefinition > task-definition.json
+
+      - name: Update container image
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: rupaya-backend-staging
+          image: ${{ env.ECR_REGISTRY }}/rupaya-backend:${{ needs.build-image.outputs.image-tag }}
+
+      - name: Deploy to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          service: rupaya-backend-staging
+          cluster: rupaya-ecs-staging
+          wait-for-service-stability: true
+
+  # ========== SMOKE TESTS ==========
+  smoke-tests:
+    name: Staging Smoke Tests
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install test dependencies
+        run: |
+          cd backend
+          npm ci
+
+      - name: Run smoke tests
+        run: |
+          cd backend
+          npm run test:smoke
+        env:
+          API_URL: https://staging-api.rupaya.com
+          TEST_USER_EMAIL: ${{ secrets.SMOKE_TEST_EMAIL }}
+          TEST_USER_PASSWORD: ${{ secrets.SMOKE_TEST_PASSWORD }}
+
+  # ========== NOTIFICATIONS ==========
+  notify:
+    name: Send Notification
+    needs: [deploy-staging, smoke-tests]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Notify Slack - Success
+        if: success()
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          webhook-url: ${{ secrets.SLACK_WEBHOOK }}
+          payload: |
+            {
+              "text": "✅ Staging deployment successful",
+              "attachments": [
+                {
+                  "color": "good",
+                  "fields": [
+                    {"title": "Commit", "value": "${{ github.sha }}", "short": true},
+                    {"title": "Branch", "value": "develop", "short": true},
+                    {"title": "Environment", "value": "staging", "short": true},
+                    {"title": "URL", "value": "https://staging-api.rupaya.com", "short": true}
+                  ]
+                }
+              ]
+            }
+
+      - name: Notify Slack - Failure
+        if: failure()
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          webhook-url: ${{ secrets.SLACK_WEBHOOK }}
+          payload: |
+            {
+              "text": "❌ Staging deployment failed",
+              "attachments": [
+                {
+                  "color": "danger",
+                  "fields": [
+                    {"title": "Commit", "value": "${{ github.sha }}", "short": true},
+                    {"title": "Branch", "value": "develop", "short": true},
+                    {"title": "Run", "value": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}", "short": false}
+                  ]
+                }
+              ]
+            }

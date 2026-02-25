@@ -14,7 +14,7 @@ on:
     paths:
       - 'backend/**'
       - 'infra/aws/**'
-      - '.github/workflows/13-aws-deploy-production.yml'
+      - '.github/workflows/09-aws-deploy-production.yml'
   workflow_dispatch:
     inputs:
       force_deploy:

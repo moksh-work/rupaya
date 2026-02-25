@@ -18,84 +18,8 @@ permissions:
   contents: read
   checks: write
   actions: read
-  id-token: write
-
-env:
-  AWS_REGION: us-east-1
-  AWS_ROLE_ARN: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
 jobs:
-  # ========== FULL REGRESSION (MAIN) ==========
-  main-full-regression:
-    name: Main Full Regression
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_USER: test_user
-          POSTGRES_PASSWORD: test_password
-          POSTGRES_DB: rupaya_test
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-
-      redis:
-        image: redis:7-alpine
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 6379:6379
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: 'backend/package-lock.json'
-
-      - name: Install dependencies
-        run: |
-          cd backend
-          npm ci
-
-      - name: Run integration tests
-        run: |
-          cd backend
-          npm test -- __tests__/integration/ --coverage
-        env:
-          DATABASE_URL: postgres://test_user:test_password@localhost:5432/rupaya_test
-          NODE_ENV: test
-          JWT_SECRET: test-secret
-          REDIS_URL: redis://localhost:6379
-
-      - name: Run E2E tests
-        run: |
-          cd backend
-          npm test -- __tests__/e2e/ --coverage
-        env:
-          DATABASE_URL: postgres://test_user:test_password@localhost:5432/rupaya_test
-          NODE_ENV: test
-          JWT_SECRET: test-secret
-          REDIS_URL: redis://localhost:6379
-
-      - name: Run functional tests
-        run: |
-          cd backend
-          npm run test:functional --if-present || npx jest __tests__/functional/ --passWithNoTests
-
   # ========== SMOKE TESTS (POST-MERGE) ==========
   post-merge-smoke:
     name: Post-Merge Smoke Tests
@@ -252,97 +176,10 @@ jobs:
           cd android
           ./gradlew assembleDebug
 
-  infra-tests-production:
-    name: Infrastructure Tests (Production)
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.6.6
-
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ env.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Terraform Format Check
-        working-directory: infra/aws
-        run: terraform fmt -check -recursive
-
-      - name: Terraform Init (No Backend)
-        working-directory: infra/aws
-        run: terraform init -backend=false
-
-      - name: Terraform Validate
-        working-directory: infra/aws
-        run: terraform validate
-
-      - name: Terraform Plan (Production Validation)
-        working-directory: infra/aws
-        run: terraform plan -lock=false -input=false -refresh=false || true
-
-  endpoint-tests-production:
-    name: Production Endpoint Tests
-    needs: [post-merge-smoke]
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    steps:
-      - name: Resolve production API URL
-        id: api
-        run: |
-          API_URL="${{ vars.PROD_API_BASE_URL }}"
-          if [ -z "$API_URL" ]; then API_URL="https://api.rupaya.com"; fi
-          echo "url=$API_URL" >> "$GITHUB_OUTPUT"
-
-      - name: Health endpoint check
-        run: |
-          curl --fail --show-error --silent "${{ steps.api.outputs.url }}/health" > /dev/null
-
-      - name: Readiness endpoint check
-        run: |
-          curl --fail --show-error --silent "${{ steps.api.outputs.url }}/ready" > /dev/null || true
-
-  functional-tests-production:
-    name: Production Functional Tests
-    needs: [endpoint-tests-production]
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: 'backend/package-lock.json'
-
-      - name: Install dependencies
-        run: |
-          cd backend
-          npm ci
-
-      - name: Run functional tests against production
-        run: |
-          cd backend
-          npm run test:functional --if-present || npx jest __tests__/functional/ --passWithNoTests
-        env:
-          API_URL: ${{ vars.PROD_API_BASE_URL }}
-          TEST_USER_EMAIL: ${{ secrets.SMOKE_TEST_EMAIL }}
-          TEST_USER_PASSWORD: ${{ secrets.SMOKE_TEST_PASSWORD }}
-
   # ========== DEPLOYMENT READINESS CHECK ==========
   deployment-readiness:
     name: Deployment Readiness Check
-    needs: [main-full-regression, post-merge-smoke, critical-path-validation, android-smoke, infra-tests-production, endpoint-tests-production, functional-tests-production]
+    needs: [post-merge-smoke, critical-path-validation, android-smoke]
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
@@ -357,21 +194,17 @@ jobs:
           echo "- Commit: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
           echo "- Author: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Required checks executed:" >> $GITHUB_STEP_SUMMARY
-          echo "- full regression" >> $GITHUB_STEP_SUMMARY
-          echo "- smoke and critical path" >> $GITHUB_STEP_SUMMARY
-          echo "- infra validation" >> $GITHUB_STEP_SUMMARY
-          echo "- endpoint and functional tests" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Post-Merge Smoke Tests | ${{ needs.post-merge-smoke.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Critical Path Validation | ${{ needs.critical-path-validation.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Android Smoke Tests | ${{ needs.android-smoke.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
 
       - name: Verify all checks passed
         run: |
-          if [ "${{ needs.main-full-regression.result }}" != "success" ] || \
-             [ "${{ needs.post-merge-smoke.result }}" != "success" ] || \
+          if [ "${{ needs.post-merge-smoke.result }}" != "success" ] || \
              [ "${{ needs.critical-path-validation.result }}" != "success" ] || \
-             [ "${{ needs.android-smoke.result }}" != "success" ] || \
-             [ "${{ needs.infra-tests-production.result }}" != "success" ] || \
-             [ "${{ needs.endpoint-tests-production.result }}" != "success" ] || \
-             [ "${{ needs.functional-tests-production.result }}" != "success" ]; then
+             [ "${{ needs.android-smoke.result }}" != "success" ]; then
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "❌ **Main branch is NOT DEPLOYABLE - tests failed**" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY

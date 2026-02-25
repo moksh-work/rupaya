@@ -6,10 +6,10 @@ name: 06 - Release Test Suite (Pre-Production Validation)
 # Follows Amazon/Netflix pre-release validation strategy
 
 on:
-  pull_request:
+  push:
     branches:
       - release/**
-  push:
+  pull_request:
     branches:
       - release/**
   workflow_dispatch:
@@ -27,12 +27,6 @@ permissions:
   contents: read
   checks: write
   actions: read
-  id-token: write
-
-env:
-  AWS_REGION: us-east-1
-  AWS_ROLE_ARN: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-  ECR_REPOSITORY: rupaya-backend
 
 jobs:
   # ========== FULL REGRESSION TESTS ==========
@@ -405,162 +399,10 @@ jobs:
           JWT_SECRET: test-secret
           REDIS_URL: redis://localhost:6379
 
-  infra-tests-staging:
-    name: Infrastructure Tests (Staging)
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.6.6
-
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ env.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Terraform Format Check
-        working-directory: infra/aws
-        run: terraform fmt -check -recursive
-
-      - name: Terraform Init (No Backend)
-        working-directory: infra/aws
-        run: terraform init -backend=false
-
-      - name: Terraform Validate
-        working-directory: infra/aws
-        run: terraform validate
-
-      - name: Terraform Plan (Staging Validation)
-        working-directory: infra/aws
-        run: terraform plan -lock=false -input=false -refresh=false || true
-
-  deploy-staging:
-    name: Deploy to AWS Staging
-    needs: [regression-tests, e2e-tests, performance-tests, migration-validation, android-release-tests, release-smoke-tests, infra-tests-staging]
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    environment:
-      name: staging
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ env.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Build and push staging image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./backend
-          file: ./backend/Dockerfile
-          push: true
-          tags: |
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:staging-${{ github.sha }}
-
-      - name: Resolve ECS staging target
-        id: ecs
-        run: |
-          CLUSTER="${{ vars.STAGING_ECS_CLUSTER }}"
-          SERVICE="${{ vars.STAGING_ECS_SERVICE }}"
-          TASK_DEF="${{ vars.STAGING_ECS_TASK_DEFINITION }}"
-          if [ -z "$CLUSTER" ]; then CLUSTER="rupaya-ecs-staging"; fi
-          if [ -z "$SERVICE" ]; then SERVICE="rupaya-backend-staging"; fi
-          if [ -z "$TASK_DEF" ]; then TASK_DEF="rupaya-backend-staging"; fi
-          echo "cluster=$CLUSTER" >> "$GITHUB_OUTPUT"
-          echo "service=$SERVICE" >> "$GITHUB_OUTPUT"
-          echo "task_definition=$TASK_DEF" >> "$GITHUB_OUTPUT"
-
-      - name: Download current task definition
-        run: |
-          aws ecs describe-task-definition \
-            --task-definition "${{ steps.ecs.outputs.task_definition }}" \
-            --query taskDefinition > task-definition.json
-
-      - name: Render task definition
-        id: task-def
-        uses: aws-actions/amazon-ecs-render-task-definition@v1
-        with:
-          task-definition: task-definition.json
-          container-name: rupaya-backend-staging
-          image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:staging-${{ github.sha }}
-
-      - name: Deploy ECS service
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
-        with:
-          task-definition: ${{ steps.task-def.outputs.task-definition }}
-          cluster: ${{ steps.ecs.outputs.cluster }}
-          service: ${{ steps.ecs.outputs.service }}
-          wait-for-service-stability: true
-
-  endpoint-tests-staging:
-    name: Staging Endpoint Tests
-    needs: [deploy-staging]
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    steps:
-      - name: Resolve staging API URL
-        id: api
-        run: |
-          API_URL="${{ vars.STAGING_API_BASE_URL }}"
-          if [ -z "$API_URL" ]; then API_URL="https://staging-api.rupaya.com"; fi
-          echo "url=$API_URL" >> "$GITHUB_OUTPUT"
-
-      - name: Health endpoint check
-        run: |
-          curl --fail --show-error --silent "${{ steps.api.outputs.url }}/health" > /dev/null
-
-      - name: Readiness endpoint check
-        run: |
-          curl --fail --show-error --silent "${{ steps.api.outputs.url }}/ready" > /dev/null || true
-
-  functional-tests-staging:
-    name: Staging Functional Tests
-    needs: [endpoint-tests-staging]
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: 'backend/package-lock.json'
-
-      - name: Install dependencies
-        run: |
-          cd backend
-          npm ci
-
-      - name: Run functional tests against staging
-        run: |
-          cd backend
-          npm run test:functional --if-present || npx jest __tests__/functional/ --passWithNoTests
-        env:
-          API_URL: ${{ vars.STAGING_API_BASE_URL }}
-          TEST_USER_EMAIL: ${{ secrets.SMOKE_TEST_EMAIL }}
-          TEST_USER_PASSWORD: ${{ secrets.SMOKE_TEST_PASSWORD }}
-
   # ========== RELEASE TEST SUMMARY ==========
   release-test-summary:
     name: Release Test Summary
-    needs: [regression-tests, e2e-tests, performance-tests, migration-validation, android-release-tests, release-smoke-tests, infra-tests-staging, deploy-staging, endpoint-tests-staging, functional-tests-staging]
+    needs: [regression-tests, e2e-tests, performance-tests, migration-validation, android-release-tests, release-smoke-tests]
     runs-on: ubuntu-latest
     if: always()
     timeout-minutes: 5
@@ -580,18 +422,10 @@ jobs:
           echo "| Migration Validation | ${{ needs.migration-validation.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Android Release Tests | ${{ needs.android-release-tests.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Release Smoke Tests | ${{ needs.release-smoke-tests.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
-           echo "| Infra Tests (Staging) | ${{ needs.infra-tests-staging.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
-           echo "| Deploy to Staging AWS | ${{ needs.deploy-staging.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
-           echo "| Endpoint Tests (Staging) | ${{ needs.endpoint-tests-staging.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
-           echo "| Functional Tests (Staging) | ${{ needs.functional-tests-staging.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
           
           if [ "${{ needs.regression-tests.result }}" != "success" ] || \
              [ "${{ needs.e2e-tests.result }}" != "success" ] || \
-             [ "${{ needs.release-smoke-tests.result }}" != "success" ] || \
-             [ "${{ needs.infra-tests-staging.result }}" != "success" ] || \
-             [ "${{ needs.deploy-staging.result }}" != "success" ] || \
-             [ "${{ needs.endpoint-tests-staging.result }}" != "success" ] || \
-             [ "${{ needs.functional-tests-staging.result }}" != "success" ]; then
+             [ "${{ needs.release-smoke-tests.result }}" != "success" ]; then
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "❌ **Release NOT READY for production - critical tests failed**" >> $GITHUB_STEP_SUMMARY
             exit 1

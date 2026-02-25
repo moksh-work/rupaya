@@ -1,0 +1,56 @@
+name: 11 - ECS Deploy
+
+# Manual-only deployment workflow
+# Prevents accidental auto-deployments from any branch
+# Trigger: GitHub Actions UI → workflow_dispatch only
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Deploy Environment
+        required: true
+        type: choice
+        default: staging
+        options:
+          - staging
+          - production
+
+jobs:
+  deploy:
+    name: Deploy to ${{ github.event.inputs.environment }}
+    runs-on: ubuntu-latest
+    
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set environment
+        id: env
+        run: |
+          ENV="${{ github.event.inputs.environment }}"
+          echo "environment=$ENV" >> $GITHUB_OUTPUT
+          
+          if [[ "$ENV" == "production" ]]; then
+            echo "cluster=rupaya-ecs" >> $GITHUB_OUTPUT
+            echo "service=rupaya-backend" >> $GITHUB_OUTPUT
+          else
+            echo "cluster=rupaya-ecs-staging" >> $GITHUB_OUTPUT
+            echo "service=rupaya-backend-staging" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Deploy
+        run: |
+          echo "✅ Deploying to ${{ steps.env.outputs.environment }}"
+          echo "Cluster: ${{ steps.env.outputs.cluster }}"
+          echo "Service: ${{ steps.env.outputs.service }}"

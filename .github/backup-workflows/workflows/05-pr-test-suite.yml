@@ -8,7 +8,9 @@ name: 05 - PR Test Suite (Pre-Merge Validation)
 on:
   pull_request:
     branches: 
+      - main
       - develop
+      - release/**
   workflow_dispatch:
 
 concurrency:
@@ -19,13 +21,6 @@ permissions:
   contents: read
   pull-requests: write
   checks: write
-  id-token: write
-  security-events: write
-
-env:
-  AWS_REGION: us-east-1
-  AWS_ROLE_ARN: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-  ECR_REPOSITORY: rupaya-backend
 
 jobs:
   # ========== BACKEND INTEGRATION TESTS ==========
@@ -250,6 +245,9 @@ jobs:
     name: Security Validation
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
 
     steps:
       - uses: actions/checkout@v4
@@ -275,162 +273,10 @@ jobs:
             exit 1
           fi
 
-  infra-tests-development:
-    name: Infrastructure Tests (Development)
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.6.6
-
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ env.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Terraform Format Check
-        working-directory: infra/aws
-        run: terraform fmt -check -recursive
-
-      - name: Terraform Init (No Backend)
-        working-directory: infra/aws
-        run: terraform init -backend=false
-
-      - name: Terraform Validate
-        working-directory: infra/aws
-        run: terraform validate
-
-      - name: Terraform Plan (Development Validation)
-        working-directory: infra/aws
-        run: terraform plan -lock=false -input=false -refresh=false || true
-
-  deploy-development:
-    name: Deploy to AWS Development
-    needs: [backend-integration, contract-tests, android-integration, component-tests, security-validation, infra-tests-development]
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    environment:
-      name: development
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ env.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Build and push development image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./backend
-          file: ./backend/Dockerfile
-          push: true
-          tags: |
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:dev-${{ github.sha }}
-
-      - name: Resolve ECS target
-        id: ecs
-        run: |
-          CLUSTER="${{ vars.DEV_ECS_CLUSTER }}"
-          SERVICE="${{ vars.DEV_ECS_SERVICE }}"
-          TASK_DEF="${{ vars.DEV_ECS_TASK_DEFINITION }}"
-          if [ -z "$CLUSTER" ]; then CLUSTER="rupaya-ecs-staging"; fi
-          if [ -z "$SERVICE" ]; then SERVICE="rupaya-backend-staging"; fi
-          if [ -z "$TASK_DEF" ]; then TASK_DEF="rupaya-backend-staging"; fi
-          echo "cluster=$CLUSTER" >> "$GITHUB_OUTPUT"
-          echo "service=$SERVICE" >> "$GITHUB_OUTPUT"
-          echo "task_definition=$TASK_DEF" >> "$GITHUB_OUTPUT"
-
-      - name: Download current task definition
-        run: |
-          aws ecs describe-task-definition \
-            --task-definition "${{ steps.ecs.outputs.task_definition }}" \
-            --query taskDefinition > task-definition.json
-
-      - name: Render task definition
-        id: task-def
-        uses: aws-actions/amazon-ecs-render-task-definition@v1
-        with:
-          task-definition: task-definition.json
-          container-name: rupaya-backend-staging
-          image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:dev-${{ github.sha }}
-
-      - name: Deploy ECS service
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
-        with:
-          task-definition: ${{ steps.task-def.outputs.task-definition }}
-          cluster: ${{ steps.ecs.outputs.cluster }}
-          service: ${{ steps.ecs.outputs.service }}
-          wait-for-service-stability: true
-
-  endpoint-tests-development:
-    name: Development Endpoint Tests
-    needs: [deploy-development]
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    steps:
-      - name: Resolve development API URL
-        id: api
-        run: |
-          API_URL="${{ vars.DEV_API_BASE_URL }}"
-          if [ -z "$API_URL" ]; then API_URL="https://staging-api.rupaya.com"; fi
-          echo "url=$API_URL" >> "$GITHUB_OUTPUT"
-
-      - name: Health endpoint check
-        run: |
-          curl --fail --show-error --silent "${{ steps.api.outputs.url }}/health" > /dev/null
-
-      - name: Readiness endpoint check
-        run: |
-          curl --fail --show-error --silent "${{ steps.api.outputs.url }}/ready" > /dev/null || true
-
-  functional-tests-development:
-    name: Development Functional Tests
-    needs: [endpoint-tests-development]
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: 'backend/package-lock.json'
-
-      - name: Install dependencies
-        run: |
-          cd backend
-          npm ci
-
-      - name: Run functional tests against development
-        run: |
-          cd backend
-          npm run test:functional --if-present || npx jest __tests__/functional/ --passWithNoTests
-        env:
-          API_URL: ${{ vars.DEV_API_BASE_URL }}
-          TEST_USER_EMAIL: ${{ secrets.SMOKE_TEST_EMAIL }}
-          TEST_USER_PASSWORD: ${{ secrets.SMOKE_TEST_PASSWORD }}
-
   # ========== PR TEST SUMMARY ==========
   pr-test-summary:
     name: PR Test Summary
-    needs: [backend-integration, contract-tests, android-integration, component-tests, security-validation, infra-tests-development, deploy-development, endpoint-tests-development, functional-tests-development]
+    needs: [backend-integration, contract-tests, android-integration, component-tests, security-validation]
     runs-on: ubuntu-latest
     if: always()
     timeout-minutes: 5
@@ -447,17 +293,9 @@ jobs:
           echo "| Android Integration | ${{ needs.android-integration.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Component Tests | ${{ needs.component-tests.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Security Validation | ${{ needs.security-validation.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
-           echo "| Infra Tests (Dev) | ${{ needs.infra-tests-development.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
-           echo "| Deploy to Dev AWS | ${{ needs.deploy-development.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
-           echo "| Endpoint Tests (Dev) | ${{ needs.endpoint-tests-development.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
-           echo "| Functional Tests (Dev) | ${{ needs.functional-tests-development.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
           
           if [ "${{ needs.backend-integration.result }}" != "success" ] || \
-             [ "${{ needs.android-integration.result }}" != "success" ] || \
-             [ "${{ needs.infra-tests-development.result }}" != "success" ] || \
-             [ "${{ needs.deploy-development.result }}" != "success" ] || \
-             [ "${{ needs.endpoint-tests-development.result }}" != "success" ] || \
-             [ "${{ needs.functional-tests-development.result }}" != "success" ]; then
+             [ "${{ needs.android-integration.result }}" != "success" ]; then
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "❌ **PR not ready for merge - tests failed**" >> $GITHUB_STEP_SUMMARY
             exit 1
@@ -476,17 +314,9 @@ jobs:
             const androidStatus = '${{ needs.android-integration.result }}' === 'success' ? '✅' : '❌';
             const componentStatus = '${{ needs.component-tests.result }}' === 'success' ? '✅' : '❌';
             const securityStatus = '${{ needs.security-validation.result }}' === 'success' ? '✅' : '❌';
-            const infraStatus = '${{ needs.infra-tests-development.result }}' === 'success' ? '✅' : '❌';
-            const deployStatus = '${{ needs.deploy-development.result }}' === 'success' ? '✅' : '❌';
-            const endpointStatus = '${{ needs.endpoint-tests-development.result }}' === 'success' ? '✅' : '❌';
-            const functionalStatus = '${{ needs.functional-tests-development.result }}' === 'success' ? '✅' : '❌';
             
             const allPassed = '${{ needs.backend-integration.result }}' === 'success' && 
-                            '${{ needs.android-integration.result }}' === 'success' &&
-                            '${{ needs.infra-tests-development.result }}' === 'success' &&
-                            '${{ needs.deploy-development.result }}' === 'success' &&
-                            '${{ needs.endpoint-tests-development.result }}' === 'success' &&
-                            '${{ needs.functional-tests-development.result }}' === 'success';
+                            '${{ needs.android-integration.result }}' === 'success';
             
             const body = `## 🧪 PR Test Results
             
@@ -497,10 +327,6 @@ jobs:
             | Android Integration | ${androidStatus} |
             | Component Tests | ${componentStatus} |
             | Security Validation | ${securityStatus} |
-            | Infra Tests (Dev) | ${infraStatus} |
-            | Deploy to Dev AWS | ${deployStatus} |
-            | Endpoint Tests (Dev) | ${endpointStatus} |
-            | Functional Tests (Dev) | ${functionalStatus} |
             
             ${allPassed ? '✅ **All required tests passed - PR ready for merge**' : '❌ **PR not ready for merge - please fix failing tests**'}
             `;
