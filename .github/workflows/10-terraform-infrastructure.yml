@@ -1,4 +1,4 @@
-name: 09 - Terraform Infrastructure Deploy
+name: 10 - Terraform Infrastructure Deploy
 
 # Workflow: Terraform deployment following trunk-based strategy
 # PR → Plan only

@@ -1,4 +1,4 @@
-name: 🚀 Manage Feature Flags & Deployment
+name: 15 - Manage Feature Flags & Deployment
 
 on:
   workflow_dispatch:
