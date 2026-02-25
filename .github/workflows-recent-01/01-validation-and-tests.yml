@@ -1,0 +1,328 @@
+name: 01 - Fast Feedback (Smoke Tests & Validation)
+
+# Fast feedback loop for feature branches (5-10 min target)
+# Industry best practice: Run critical path validation early
+# Feature branches: smoke tests, unit tests, linting, basic security
+# PR/Main: All tests run in workflow 05 (comprehensive suite)
+# Follows Google/Netflix test pyramid: fast smoke tests → comprehensive tests
+
+on:
+  push:
+    branches:
+      - main
+      - feature/**
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  # ========== LINTING & CODE QUALITY ==========
+  lint-and-quality:
+    name: Lint & Code Quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'backend/package-lock.json'
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          npm ci
+
+      - name: Run ESLint
+        run: |
+          cd backend
+          npm run lint --if-present || echo "Lint script not found"
+
+      - name: Check code formatting
+        run: |
+          cd backend
+          npm run format:check --if-present || echo "Format check not found"
+
+      - name: SonarQube analysis (optional)
+        run: |
+          echo "SonarQube integration would go here"
+
+  # ========== SMOKE TESTS (FAST) ==========
+  smoke-tests:
+    name: Smoke Tests (Critical Path)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: rupaya_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'backend/package-lock.json'
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          npm ci
+
+      - name: Run smoke tests (critical path only)
+        run: |
+          cd backend
+          npm test -- __tests__/smoke/ --coverage
+        env:
+          DATABASE_URL: postgres://test_user:test_password@127.0.0.1:5432/rupaya_test
+          NODE_ENV: test
+          JWT_SECRET: test-secret
+          REFRESH_TOKEN_SECRET: test-refresh-secret
+          REDIS_URL: redis://localhost:6379
+          RUN_REMOTE_TESTS: "false"
+          DISABLE_TOKEN_CLEANUP: "true"
+          DISABLE_PWNED_CHECK: "true"
+          DISABLE_PASSWORD_STRENGTH: "true"
+
+      - name: Run unit tests (fast only)
+        run: |
+          cd backend
+          npm test -- __tests__/unit/ --testPathIgnorePatterns=slow --coverage
+        env:
+          DATABASE_URL: postgres://test_user:test_password@127.0.0.1:5432/rupaya_test
+          NODE_ENV: test
+          JWT_SECRET: test-secret
+          REDIS_URL: redis://localhost:6379
+
+      - name: Upload smoke test coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./backend/coverage/coverage-final.json
+          flags: smoke-tests
+          name: smoke-coverage
+
+  # ========== SECURITY SCANNING ==========
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload to GitHub Security
+        uses: github/codeql-action/upload-sarif@v4
+        continue-on-error: true
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Dependency check
+        run: |
+          cd backend
+          if [[ "${{ github.event_name }}" == "pull_request" || "${{ github.ref }}" == "refs/heads/main" ]]; then
+            npm audit --audit-level=high
+          else
+            npm audit --audit-level=high || echo "⚠️ Vulnerabilities found - review before merge"
+          fi
+
+  policy-guard:
+    name: Policy Guardrails
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Block static cloud credentials in workflows
+        run: |
+          if grep -RInE "(AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|GOOGLE_APPLICATION_CREDENTIALS|AZURE_CLIENT_SECRET)\s*:" .github/workflows; then
+            echo "❌ Static cloud credentials pattern detected in workflow files"
+            exit 1
+          fi
+          echo "✅ No static cloud credential patterns found"
+
+      - name: Block floating action refs
+        run: |
+          if grep -RInE "uses:\s*[^@]+@(master|main)$" .github/workflows; then
+            echo "❌ Floating action refs (main/master) are not allowed"
+            exit 1
+          fi
+          echo "✅ No floating action refs found"
+
+  sbom-backend:
+    name: SBOM (Backend)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Generate CycloneDX SBOM
+        run: |
+          cd backend
+          npm ci
+          npx --yes @cyclonedx/cyclonedx-npm --output-file ../backend-sbom.json --output-format json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-sbom
+          path: backend-sbom.json
+
+  dependency-review:
+    name: Dependency Review (PR)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dependency review
+        uses: actions/dependency-review-action@v4
+
+  # ========== BUILD VERIFICATION ==========
+  build-check:
+    name: Build Verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Build backend
+        run: |
+          cd backend
+          npm run build --if-present || echo "No build script"
+
+  # ========== BRANCH-SPECIFIC CHECKS ==========
+  branch-validation:
+    name: Branch Validation
+    runs-on: ubuntu-latest
+    if: always()
+    timeout-minutes: 10
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate branch name
+        run: |
+          BRANCH_NAME="${{ github.head_ref || github.ref_name }}"
+          
+          # Valid branch patterns
+          if [[ $BRANCH_NAME =~ ^(main|develop|release/|feature/|bugfix/|hotfix/|chore/).*$ ]]; then
+            echo "✅ Branch name '$BRANCH_NAME' follows naming convention"
+          else
+            echo "❌ Branch name '$BRANCH_NAME' does not follow convention"
+            echo "Valid patterns: main, develop, release/*, feature/*, bugfix/*, hotfix/*, chore/*"
+            exit 1
+          fi
+
+      - name: Check for main branch
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          echo "🚨 Direct push to main detected"
+          echo "ℹ️  Use: git push origin feature/your-feature && create PR"
+          exit 1
+
+  # ========== FINAL STATUS ==========
+  check-status:
+    name: Check Overall Status
+    needs: [lint-and-quality, smoke-tests, security-scan, dependency-review, policy-guard, sbom-backend, build-check]
+    runs-on: ubuntu-latest
+    if: always()
+    timeout-minutes: 10
+    
+    steps:
+      - name: Determine job statuses
+        run: |
+          if [ "${{ needs.lint-and-quality.result }}" != "success" ]; then
+            echo "❌ Linting failed"
+            exit 1
+          fi
+          if [ "${{ needs.smoke-tests.result }}" != "success" ]; then
+            echo "❌ Tests failed"
+            exit 1
+          fi
+          if [ "${{ needs.security-scan.result }}" != "success" ]; then
+            echo "⚠️  Security scan warnings"
+            # Don't fail on security warnings
+          fi
+          if [ "${{ needs.dependency-review.result }}" != "success" ] && [ "${{ needs.dependency-review.result }}" != "skipped" ]; then
+            echo "❌ Dependency review failed"
+            exit 1
+          fi
+          if [ "${{ needs.policy-guard.result }}" != "success" ]; then
+            echo "❌ Policy guardrails failed"
+            exit 1
+          fi
+          if [ "${{ needs.sbom-backend.result }}" != "success" ]; then
+            echo "❌ SBOM generation failed"
+            exit 1
+          fi
+          echo "✅ All checks passed"

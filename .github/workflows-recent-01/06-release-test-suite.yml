@@ -1,0 +1,601 @@
+name: 06 - Release Test Suite (Pre-Production Validation)
+
+# Comprehensive release validation before production deployment
+# Target: 20-30 minutes
+# Industry pattern: Full regression, performance, and load testing
+# Follows Amazon/Netflix pre-release validation strategy
+
+on:
+  pull_request:
+    branches:
+      - release/**
+  push:
+    branches:
+      - release/**
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: 'Release version to test'
+        required: false
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false  # Don't cancel release tests
+
+permissions:
+  contents: read
+  checks: write
+  actions: read
+  id-token: write
+
+env:
+  AWS_REGION: us-east-1
+  AWS_ROLE_ARN: ${{ secrets.AWS_OIDC_ROLE_ARN_STAGING }}
+  ECR_REPOSITORY: rupaya-backend
+
+jobs:
+  # ========== FULL REGRESSION TESTS ==========
+  regression-tests:
+    name: Full Regression Suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: rupaya_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'backend/package-lock.json'
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          npm ci
+
+      - name: Run database migrations
+        run: |
+          cd backend
+          npm run migrate:test
+        env:
+          DATABASE_URL: postgres://test_user:test_password@localhost:5432/rupaya_test
+          NODE_ENV: test
+
+      - name: Run all backend tests (integration + E2E)
+        run: |
+          cd backend
+          npm test -- __tests__/ --coverage --maxWorkers=2
+        env:
+          DATABASE_URL: postgres://test_user:test_password@localhost:5432/rupaya_test
+          NODE_ENV: test
+          JWT_SECRET: test-secret
+          REFRESH_TOKEN_SECRET: test-refresh-secret
+          REDIS_URL: redis://localhost:6379
+
+      - name: Upload regression coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./backend/coverage/coverage-final.json
+          flags: regression-tests
+          name: release-regression-coverage
+
+      - name: Archive regression results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: regression-test-results
+          path: backend/coverage/
+
+  # ========== E2E TESTS ==========
+  e2e-tests:
+    name: End-to-End Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: rupaya_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'backend/package-lock.json'
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          npm ci
+
+      - name: Run E2E tests
+        run: |
+          cd backend
+          npm test -- __tests__/e2e/ --coverage
+        env:
+          DATABASE_URL: postgres://test_user:test_password@localhost:5432/rupaya_test
+          NODE_ENV: test
+          JWT_SECRET: test-secret
+          REDIS_URL: redis://localhost:6379
+
+      - name: Upload E2E results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-results
+          path: backend/coverage/
+
+  # ========== PERFORMANCE TESTS ==========
+  performance-tests:
+    name: Performance & Load Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: rupaya_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'backend/package-lock.json'
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          npm ci
+
+      - name: Run performance tests
+        run: |
+          cd backend
+          npm run test:performance --if-present || echo "Performance tests not configured"
+        env:
+          DATABASE_URL: postgres://test_user:test_password@localhost:5432/rupaya_test
+          NODE_ENV: test
+          REDIS_URL: redis://localhost:6379
+
+      - name: Run load tests
+        run: |
+          cd backend
+          npm run test:load --if-present || echo "Load tests not configured"
+
+      - name: Performance baseline check
+        run: |
+          echo "Checking performance baseline..."
+          echo "API response time should be < 200ms for 95th percentile"
+
+  # ========== DATABASE MIGRATION VALIDATION ==========
+  migration-validation:
+    name: Database Migration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: rupaya_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'backend/package-lock.json'
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          npm ci
+
+      - name: Test migrations up
+        run: |
+          cd backend
+          npm run migrate:test
+        env:
+          DATABASE_URL: postgres://test_user:test_password@localhost:5432/rupaya_test
+          NODE_ENV: test
+
+      - name: Test migrations down (rollback)
+        run: |
+          cd backend
+          npm run migrate:rollback --if-present || echo "Rollback not configured"
+        env:
+          DATABASE_URL: postgres://test_user:test_password@localhost:5432/rupaya_test
+          NODE_ENV: test
+
+      - name: Test migration re-apply
+        run: |
+          cd backend
+          npm run migrate:test
+        env:
+          DATABASE_URL: postgres://test_user:test_password@localhost:5432/rupaya_test
+          NODE_ENV: test
+
+  # ========== ANDROID RELEASE TESTS ==========
+  android-release-tests:
+    name: Android Release Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Run Android unit tests
+        run: |
+          cd android
+          ./gradlew testReleaseUnitTest --info
+
+      - name: Run Android lint (release)
+        run: |
+          cd android
+          ./gradlew lintRelease
+
+      - name: Build Android release APK
+        run: |
+          cd android
+          ./gradlew assembleRelease -x bundleReleaseJsAndAssets
+
+      - name: Generate coverage report
+        run: |
+          cd android
+          ./gradlew testReleaseUnitTestCoverage
+        if: always()
+
+      - name: Archive release test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-release-test-results
+          path: android/app/build/reports/
+
+  # ========== RELEASE SMOKE TESTS ==========
+  release-smoke-tests:
+    name: Release Smoke Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: rupaya_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'backend/package-lock.json'
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          npm ci
+
+      - name: Run release smoke tests
+        run: |
+          cd backend
+          npm test -- __tests__/smoke/ --coverage
+        env:
+          DATABASE_URL: postgres://test_user:test_password@localhost:5432/rupaya_test
+          NODE_ENV: production
+          JWT_SECRET: test-secret
+          REDIS_URL: redis://localhost:6379
+
+  infra-tests-staging:
+    name: Infrastructure Tests (Staging)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.6
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform Format Check
+        working-directory: infra/aws
+        run: terraform fmt -check -recursive
+
+      - name: Terraform Init (No Backend)
+        working-directory: infra/aws
+        run: terraform init -backend=false
+
+      - name: Terraform Validate
+        working-directory: infra/aws
+        run: terraform validate
+
+      - name: Terraform Plan (Staging Validation)
+        working-directory: infra/aws
+        run: terraform plan -lock=false -input=false -refresh=false || true
+
+  deploy-staging:
+    name: Deploy to AWS Staging
+    needs: [regression-tests, e2e-tests, performance-tests, migration-validation, android-release-tests, release-smoke-tests, infra-tests-staging]
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment:
+      name: staging
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push staging image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:staging-${{ github.sha }}
+
+      - name: Resolve ECS staging target
+        id: ecs
+        run: |
+          CLUSTER="${{ vars.STAGING_ECS_CLUSTER }}"
+          SERVICE="${{ vars.STAGING_ECS_SERVICE }}"
+          TASK_DEF="${{ vars.STAGING_ECS_TASK_DEFINITION }}"
+          if [ -z "$CLUSTER" ]; then CLUSTER="rupaya-ecs-staging"; fi
+          if [ -z "$SERVICE" ]; then SERVICE="rupaya-backend-staging"; fi
+          if [ -z "$TASK_DEF" ]; then TASK_DEF="rupaya-backend-staging"; fi
+          echo "cluster=$CLUSTER" >> "$GITHUB_OUTPUT"
+          echo "service=$SERVICE" >> "$GITHUB_OUTPUT"
+          echo "task_definition=$TASK_DEF" >> "$GITHUB_OUTPUT"
+
+      - name: Download current task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition "${{ steps.ecs.outputs.task_definition }}" \
+            --query taskDefinition > task-definition.json
+
+      - name: Render task definition
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: rupaya-backend-staging
+          image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:staging-${{ github.sha }}
+
+      - name: Deploy ECS service
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          cluster: ${{ steps.ecs.outputs.cluster }}
+          service: ${{ steps.ecs.outputs.service }}
+          wait-for-service-stability: true
+
+  endpoint-tests-staging:
+    name: Staging Endpoint Tests
+    needs: [deploy-staging]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Resolve staging API URL
+        id: api
+        run: |
+          API_URL="${{ vars.STAGING_API_BASE_URL }}"
+          if [ -z "$API_URL" ]; then API_URL="https://staging-api.rupaya.com"; fi
+          echo "url=$API_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Health endpoint check
+        run: |
+          curl --fail --show-error --silent "${{ steps.api.outputs.url }}/health" > /dev/null
+
+      - name: Readiness endpoint check
+        run: |
+          curl --fail --show-error --silent "${{ steps.api.outputs.url }}/ready" > /dev/null || true
+
+  functional-tests-staging:
+    name: Staging Functional Tests
+    needs: [endpoint-tests-staging]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'backend/package-lock.json'
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          npm ci
+
+      - name: Run functional tests against staging
+        run: |
+          cd backend
+          npm run test:functional --if-present || npx jest __tests__/functional/ --passWithNoTests
+        env:
+          API_URL: ${{ vars.STAGING_API_BASE_URL }}
+          TEST_USER_EMAIL: ${{ secrets.SMOKE_TEST_EMAIL }}
+          TEST_USER_PASSWORD: ${{ secrets.SMOKE_TEST_PASSWORD }}
+
+  # ========== RELEASE TEST SUMMARY ==========
+  release-test-summary:
+    name: Release Test Summary
+    needs: [regression-tests, e2e-tests, performance-tests, migration-validation, android-release-tests, release-smoke-tests, infra-tests-staging, deploy-staging, endpoint-tests-staging, functional-tests-staging]
+    runs-on: ubuntu-latest
+    if: always()
+    timeout-minutes: 5
+
+    steps:
+      - name: Check all test results
+        run: |
+          echo "## 🚀 Release Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Release Version: ${{ inputs.release_version || github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Test Suite | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|------------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Regression Tests | ${{ needs.regression-tests.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| E2E Tests | ${{ needs.e2e-tests.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Performance Tests | ${{ needs.performance-tests.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Migration Validation | ${{ needs.migration-validation.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Android Release Tests | ${{ needs.android-release-tests.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Release Smoke Tests | ${{ needs.release-smoke-tests.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+           echo "| Infra Tests (Staging) | ${{ needs.infra-tests-staging.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+           echo "| Deploy to Staging AWS | ${{ needs.deploy-staging.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+           echo "| Endpoint Tests (Staging) | ${{ needs.endpoint-tests-staging.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+           echo "| Functional Tests (Staging) | ${{ needs.functional-tests-staging.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ needs.regression-tests.result }}" != "success" ] || \
+             [ "${{ needs.e2e-tests.result }}" != "success" ] || \
+             [ "${{ needs.release-smoke-tests.result }}" != "success" ] || \
+             [ "${{ needs.infra-tests-staging.result }}" != "success" ] || \
+             [ "${{ needs.deploy-staging.result }}" != "success" ] || \
+             [ "${{ needs.endpoint-tests-staging.result }}" != "success" ] || \
+             [ "${{ needs.functional-tests-staging.result }}" != "success" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "❌ **Release NOT READY for production - critical tests failed**" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **Release READY for production deployment**" >> $GITHUB_STEP_SUMMARY

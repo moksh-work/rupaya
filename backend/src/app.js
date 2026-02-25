@@ -19,9 +19,49 @@ const securityHeaders = require('./middleware/securityHeaders');
 const errorHandler = require('./middleware/errorHandler');
 const logger = require('./utils/logger');
 const AuthService = require('./services/AuthService');
+const FeatureFlagsService = require('./services/FeatureFlagsService');
+const DeploymentMetricsService = require('./services/DeploymentMetricsService');
+const featureFlagsMiddleware = require('./middleware/featureFlags');
+const deploymentMetricsRoutes = require('./routes/deploymentMetrics');
 require('dotenv').config();
 
 const app = express();
+
+// Initialize feature flags and metrics services (if database is available)
+let featureFlagsService = null;
+let deploymentMetricsService = null;
+
+// Feature Flags and Metrics Initialization
+const initializeDeploymentServices = async (db, redis) => {
+  try {
+    if (!featureFlagsService && db && redis) {
+      featureFlagsService = new FeatureFlagsService(db, redis);
+      deploymentMetricsService = new DeploymentMetricsService(redis, featureFlagsService);
+      
+      // Setup rollback trigger listener
+      deploymentMetricsService.on('rollback:triggered', (event) => {
+        logger.error({
+          severity: 'CRITICAL',
+          message: 'AUTOMATIC ROLLBACK TRIGGERED',
+          reason: event.reason,
+          metrics: event.metrics,
+          timestamp: event.timestamp.toISOString()
+        });
+        
+        // Emit event that could trigger automated rollback in deployment system
+        // (e.g., signal to deployment pipeline to revert)
+      });
+
+      logger.info('Feature Flags and Deployment Metrics services initialized');
+    }
+    return { featureFlagsService, deploymentMetricsService };
+  } catch (error) {
+    logger.error('Failed to initialize deployment services:', error);
+    return { featureFlagsService: null, deploymentMetricsService: null };
+  }
+};
+
+app.set('deploymentServices', { featureFlagsService, deploymentMetricsService });
 
 // Security Middleware
 app.disable('x-powered-by');
@@ -95,9 +135,45 @@ app.use('/api/investments', authMiddleware, investmentRoutes);
 app.use('/api/notifications', authMiddleware, notificationRoutes);
 app.use('/api/settings', authMiddleware, settingsRoutes);
 
-// Health Check
-app.get('/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
+// Feature Flags and Metrics Middleware (if services initialized)
+if (featureFlagsService && deploymentMetricsService) {
+  app.use(featureFlagsMiddleware(featureFlagsService, deploymentMetricsService));
+  
+  // Admin Deployment Metrics Endpoints
+  app.use('/api/admin/deployment', deploymentMetricsRoutes(featureFlagsService, deploymentMetricsService));
+}
+
+// Health Check - Enhanced with deployment metrics
+app.get('/health', async (req, res) => {
+  try {
+    const health = {
+      status: 'OK',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      environment: process.env.NODE_ENV,
+      version: process.env.DEPLOYMENT_VERSION || 'unknown'
+    };
+
+    // Add deployment metrics if available
+    if (deploymentMetricsService) {
+      const metrics = await deploymentMetricsService.getHealthStatus();
+      health.deployment = metrics;
+    }
+
+    // Add feature flags metrics if available
+    if (featureFlagsService) {
+      health.featureFlags = featureFlagsService.getMetrics();
+    }
+
+    res.json(health);
+  } catch (error) {
+    logger.error('Health check error:', error);
+    res.status(503).json({
+      status: 'DEGRADED',
+      timestamp: new Date().toISOString(),
+      error: error.message
+    });
+  }
 });
 
 // 404 Handler
@@ -203,3 +279,4 @@ if (shouldRunCleanup) {
 }
 
 module.exports = app;
+module.exports.initializeDeploymentServices = initializeDeploymentServices;

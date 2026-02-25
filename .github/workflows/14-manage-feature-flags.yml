@@ -1,0 +1,301 @@
+name: 🚀 Manage Feature Flags & Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to perform'
+        required: true
+        type: choice
+        options:
+          - get_all_flags
+          - enable_flag
+          - disable_flag
+          - set_rollout_percentage
+          - advance_canary_stage
+          - rollback_canary_stage
+          - create_ab_test
+          - stop_ab_test
+          - get_health_status
+          - get_metrics
+          - get_experiment_results
+      
+      flag_key:
+        description: 'Feature flag key (required for enable/disable/rollout actions)'
+        required: false
+        type: string
+        default: ''
+      
+      percentage:
+        description: 'Rollout percentage (0-100, for set_rollout_percentage)'
+        required: false
+        type: string
+        default: ''
+      
+      experiment_variants:
+        description: 'JSON map of variants (for create_ab_test, e.g., {"control": 50, "variant_a": 50})'
+        required: false
+        type: string
+        default: ''
+      
+      reason:
+        description: 'Reason for the change (for audit trail)'
+        required: false
+        type: string
+        default: 'Manual deployment'
+      
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options:
+          - development
+          - staging
+          - production
+        default: 'staging'
+      
+      api_base_url:
+        description: 'API base URL (leave empty for auto-detect)'
+        required: false
+        type: string
+        default: ''
+
+env:
+  NODE_ENV: ${{ inputs.environment }}
+
+jobs:
+  manage-flags:
+    name: Manage Feature Flags
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    
+    permissions:
+      contents: read
+      id-token: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets[format('AWS_OIDC_ROLE_ARN_{0}', env.ROLE_ENV)] }}
+          aws-region: us-east-1
+        env:
+          ROLE_ENV: ${{ inputs.environment == 'production' && 'PROD' || inputs.environment == 'staging' && 'STAGING' || 'DEV' }}
+      
+      - name: Determine API URL
+        id: api-url
+        run: |
+          if [ -n "${{ inputs.api_base_url }}" ]; then
+            echo "url=${{ inputs.api_base_url }}" >> $GITHUB_OUTPUT
+          else
+            case "${{ inputs.environment }}" in
+              development)
+                echo "url=http://localhost:3000" >> $GITHUB_OUTPUT
+                ;;
+              staging)
+                echo "url=https://api-staging.rupaya.app" >> $GITHUB_OUTPUT
+                ;;
+              production)
+                echo "url=https://api.rupaya.app" >> $GITHUB_OUTPUT
+                ;;
+            esac
+          fi
+      
+      - name: Get all feature flags
+        if: inputs.action == 'get_all_flags'
+        run: |
+          curl -s -X GET "${{ steps.api-url.outputs.url }}/api/admin/deployment/feature-flags" \
+            -H "Authorization: Bearer ${{ secrets.ADMIN_API_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            | jq '.' | tee flags-response.json
+      
+      - name: Enable feature flag
+        if: inputs.action == 'enable_flag'
+        run: |
+          if [ -z "${{ inputs.flag_key }}" ]; then
+            echo "❌ Error: flag_key is required for enable action"
+            exit 1
+          fi
+          
+          echo "⏳ Enabling flag: ${{ inputs.flag_key }}"
+          
+          curl -s -X PUT "${{ steps.api-url.outputs.url }}/api/admin/deployment/feature-flags/${{ inputs.flag_key }}" \
+            -H "Authorization: Bearer ${{ secrets.ADMIN_API_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "enabled": true,
+              "percentage": 100
+            }' \
+            | jq '.' | tee flag-update-response.json
+          
+          echo "✅ Flag enabled"
+      
+      - name: Disable feature flag
+        if: inputs.action == 'disable_flag'
+        run: |
+          if [ -z "${{ inputs.flag_key }}" ]; then
+            echo "❌ Error: flag_key is required for disable action"
+            exit 1
+          fi
+          
+          echo "⏳ Disabling flag: ${{ inputs.flag_key }}"
+          
+          curl -s -X PUT "${{ steps.api-url.outputs.url }}/api/admin/deployment/feature-flags/${{ inputs.flag_key }}" \
+            -H "Authorization: Bearer ${{ secrets.ADMIN_API_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "enabled": false,
+              "percentage": 0
+            }' \
+            | jq '.' | tee flag-update-response.json
+          
+          echo "✅ Flag disabled"
+      
+      - name: Set rollout percentage
+        if: inputs.action == 'set_rollout_percentage'
+        run: |
+          if [ -z "${{ inputs.flag_key }}" ]; then
+            echo "❌ Error: flag_key is required"
+            exit 1
+          fi
+          
+          if [ -z "${{ inputs.percentage }}" ]; then
+            echo "❌ Error: percentage is required"
+            exit 1
+          fi
+          
+          PERCENTAGE=${{ inputs.percentage }}
+          if ! [[ "$PERCENTAGE" =~ ^[0-9]+$ ]] || [ "$PERCENTAGE" -lt 0 ] || [ "$PERCENTAGE" -gt 100 ]; then
+            echo "❌ Error: percentage must be between 0 and 100"
+            exit 1
+          fi
+          
+          echo "⏳ Setting rollout to ${{ inputs.percentage }}% for ${{ inputs.flag_key }}"
+          
+          curl -s -X PUT "${{ steps.api-url.outputs.url }}/api/admin/deployment/feature-flags/${{ inputs.flag_key }}" \
+            -H "Authorization: Bearer ${{ secrets.ADMIN_API_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"percentage\": ${{ inputs.percentage }},
+              \"enabled\": ${{ inputs.percentage > 0 }}
+            }" \
+            | jq '.' | tee flag-update-response.json
+          
+          echo "✅ Rollout percentage updated"
+      
+      - name: Advance canary stage
+        if: inputs.action == 'advance_canary_stage'
+        run: |
+          if [ -z "${{ inputs.flag_key }}" ]; then
+            echo "❌ Error: flag_key is required"
+            exit 1
+          fi
+          
+          echo "⏳ Advancing canary stage for ${{ inputs.flag_key }}"
+          
+          curl -s -X POST "${{ steps.api-url.outputs.url }}/api/admin/deployment/feature-flags/${{ inputs.flag_key }}/advance-canary" \
+            -H "Authorization: Bearer ${{ secrets.ADMIN_API_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "reason": "${{ inputs.reason }}"
+            }' \
+            | jq '.' | tee canary-response.json
+          
+          echo "✅ Canary stage advanced"
+      
+      - name: Rollback canary stage
+        if: inputs.action == 'rollback_canary_stage'
+        run: |
+          if [ -z "${{ inputs.flag_key }}" ]; then
+            echo "❌ Error: flag_key is required"
+            exit 1
+          fi
+          
+          echo "⏠️ Rolling back canary for ${{ inputs.flag_key }}"
+          
+          curl -s -X POST "${{ steps.api-url.outputs.url }}/api/admin/deployment/feature-flags/${{ inputs.flag_key }}/rollback-canary" \
+            -H "Authorization: Bearer ${{ secrets.ADMIN_API_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "reason": "${{ inputs.reason }}"
+            }' \
+            | jq '.' | tee canary-rollback-response.json
+          
+          echo "✅ Canary rolled back"
+      
+      - name: Get deployment health
+        if: inputs.action == 'get_health_status'
+        run: |
+          echo "📊 Getting deployment health status..."
+          
+          curl -s -X GET "${{ steps.api-url.outputs.url }}/api/admin/deployment/metrics/health" \
+            -H "Authorization: Bearer ${{ secrets.ADMIN_API_TOKEN }}" \
+            | jq '.' | tee health-response.json
+      
+      - name: Get deployment metrics
+        if: inputs.action == 'get_metrics'
+        run: |
+          echo "📈 Getting deployment metrics..."
+          
+          START_TIME=$(date -u -d '1 hour ago' +"%Y-%m-%dT%H:%M:%SZ")
+          END_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          
+          curl -s -X GET "${{ steps.api-url.outputs.url }}/api/admin/deployment/metrics/range?startTime=${START_TIME}&endTime=${END_TIME}" \
+            -H "Authorization: Bearer ${{ secrets.ADMIN_API_TOKEN }}" \
+            | jq '.' | tee metrics-response.json
+      
+      - name: Get experiment results
+        if: inputs.action == 'get_experiment_results'
+        run: |
+          if [ -z "${{ inputs.flag_key }}" ]; then
+            echo "❌ Error: flag_key is required"
+            exit 1
+          fi
+          
+          echo "📊 Getting A/B test results for ${{ inputs.flag_key }}"
+          
+          START_TIME=$(date -u -d '24 hours ago' +"%Y-%m-%dT%H:%M:%SZ")
+          END_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          
+          curl -s -X GET "${{ steps.api-url.outputs.url }}/api/admin/deployment/experiments/${{ inputs.flag_key }}/results?startTime=${START_TIME}&endTime=${END_TIME}" \
+            -H "Authorization: Bearer ${{ secrets.ADMIN_API_TOKEN }}" \
+            | jq '.' | tee experiment-results.json
+      
+      - name: Publish results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: feature-flag-management-results
+          path: '*-response.json'
+          retention-days: 30
+      
+      - name: Create summary
+        if: always()
+        run: |
+          echo "## Feature Flag Management Results 📋" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Action**: ${{ inputs.action }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment**: ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Flag Key**: ${{ inputs.flag_key || 'N/A' }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Reason**: ${{ inputs.reason }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Timestamp**: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f flags-response.json ]; then
+            echo "### Flags Response" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`json" >> $GITHUB_STEP_SUMMARY
+            cat flags-response.json >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ -f health-response.json ]; then
+            echo "### Health Status" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`json" >> $GITHUB_STEP_SUMMARY
+            cat health-response.json >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          fi

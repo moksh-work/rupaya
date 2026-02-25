@@ -1,0 +1,232 @@
+name: 10 - RDS Database Migrations
+
+# This workflow runs after infrastructure is deployed
+# Validates and applies database migrations
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/migrations/**'
+      - '.github/workflows/10-aws-rds-migrations.yml'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target Environment'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+
+jobs:
+  validate-migrations:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          npm ci
+
+      - name: Validate migrations structure
+        run: |
+          cd backend
+          npm run migrate -- --dry-run || true
+
+  migrate-staging:
+    needs: validate-migrations
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    environment: staging
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_STAGING }}
+          aws-region: us-east-1
+
+      - name: Get RDS credentials from AWS Secrets Manager
+        id: db-secrets
+        run: |
+          SECRET=$(aws secretsmanager get-secret-value \
+            --secret-id rupaya/rds/staging \
+            --query SecretString \
+            --output text)
+          
+          DB_USER=$(echo $SECRET | jq -r '.username')
+          DB_PASSWORD=$(echo $SECRET | jq -r '.password')
+          DB_HOST=$(echo $SECRET | jq -r '.host')
+          DB_PORT=$(echo $SECRET | jq -r '.port')
+          DB_NAME=$(echo $SECRET | jq -r '.dbname')
+          
+          # Export for subsequent steps
+          echo "db_user=$DB_USER" >> $GITHUB_OUTPUT
+          echo "db_password=$DB_PASSWORD" >> $GITHUB_OUTPUT
+          echo "db_host=$DB_HOST" >> $GITHUB_OUTPUT
+          echo "db_port=$DB_PORT" >> $GITHUB_OUTPUT
+          echo "db_name=$DB_NAME" >> $GITHUB_OUTPUT
+          
+          # Also set environment variables for the migration step
+          echo "DB_USER=$DB_USER" >> $GITHUB_ENV
+          echo "DB_PASSWORD=$DB_PASSWORD" >> $GITHUB_ENV
+          echo "DB_HOST=$DB_HOST" >> $GITHUB_ENV
+          echo "DB_PORT=$DB_PORT" >> $GITHUB_ENV
+          echo "DB_NAME=$DB_NAME" >> $GITHUB_ENV
+
+      - name: Get RDS endpoint
+        id: rds
+        run: |
+          # Use the host from Secrets Manager instead of querying RDS API
+          echo "rds_endpoint=${{ env.DB_HOST }}" >> $GITHUB_OUTPUT
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          npm ci
+
+      - name: Run migrations
+        env:
+          DB_HOST: ${{ env.DB_HOST }}
+          DB_PORT: ${{ env.DB_PORT }}
+          DB_NAME: ${{ env.DB_NAME }}
+          DB_USER: ${{ env.DB_USER }}
+          DB_PASSWORD: ${{ env.DB_PASSWORD }}
+        run: |
+          cd backend
+          npm run migrate
+
+      - name: Backup database before production
+        if: github.ref == 'refs/heads/main'
+        run: |
+          aws rds create-db-snapshot \
+            --db-instance-identifier rupaya-staging \
+            --db-snapshot-identifier rupaya-staging-pre-prod-migration-${{ github.sha }}
+
+  migrate-production:
+    needs: validate-migrations
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production')
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    environment: production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_PROD }}
+          aws-region: us-east-1
+
+      - name: Get RDS credentials from AWS Secrets Manager
+        id: db-secrets
+        run: |
+          SECRET=$(aws secretsmanager get-secret-value \
+            --secret-id rupaya/rds/production \
+            --query SecretString \
+            --output text)
+          
+          DB_USER=$(echo $SECRET | jq -r '.username')
+          DB_PASSWORD=$(echo $SECRET | jq -r '.password')
+          DB_HOST=$(echo $SECRET | jq -r '.host')
+          DB_PORT=$(echo $SECRET | jq -r '.port')
+          DB_NAME=$(echo $SECRET | jq -r '.dbname')
+          
+          # Export for subsequent steps
+          echo "db_user=$DB_USER" >> $GITHUB_OUTPUT
+          echo "db_password=$DB_PASSWORD" >> $GITHUB_OUTPUT
+          echo "db_host=$DB_HOST" >> $GITHUB_OUTPUT
+          echo "db_port=$DB_PORT" >> $GITHUB_OUTPUT
+          echo "db_name=$DB_NAME" >> $GITHUB_OUTPUT
+          
+          # Also set environment variables for the migration step
+          echo "DB_USER=$DB_USER" >> $GITHUB_ENV
+          echo "DB_PASSWORD=$DB_PASSWORD" >> $GITHUB_ENV
+          echo "DB_HOST=$DB_HOST" >> $GITHUB_ENV
+          echo "DB_PORT=$DB_PORT" >> $GITHUB_ENV
+          echo "DB_NAME=$DB_NAME" >> $GITHUB_ENV
+
+      - name: Get RDS endpoint
+        id: rds
+        run: |
+          RDS_ENDPOINT=$(aws rds describe-db-instances \
+            --db-instance-identifier rupaya-prod \
+            --query 'DBInstances[0].Endpoint.Address' \
+            --output text)
+          echo "rds_endpoint=$RDS_ENDPOINT" >> $GITHUB_OUTPUT
+
+      - name: Create production backup
+        id: backup
+        run: |
+          SNAPSHOT_ID="rupaya-prod-pre-migration-${{ github.sha }}"
+          aws rds create-db-snapshot \
+            --db-instance-identifier rupaya-prod \
+            --db-snapshot-identifier $SNAPSHOT_ID
+          echo "snapshot_id=$SNAPSHOT_ID" >> $GITHUB_OUTPUT
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          npm ci
+
+      - name: Run migrations
+        env:
+          DB_HOST: ${{ env.DB_HOST }}
+          DB_PORT: ${{ env.DB_PORT }}
+          DB_NAME: ${{ env.DB_NAME }}
+          DB_USER: ${{ env.DB_USER }}
+          DB_PASSWORD: ${{ env.DB_PASSWORD }}
+        run: |
+          cd backend
+          npm run migrate
+
+      - name: Notify Slack
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          webhook-url: ${{ secrets.SLACK_WEBHOOK }}
+          payload: |
+            {
+              "text": "✅ Production Migration Completed",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "Migration: Successful\nSnapshot ID: ${{ steps.backup.outputs.snapshot_id }}"
+                  }
+                }
+              ]
+            }
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "Migration failed! Snapshot created: ${{ steps.backup.outputs.snapshot_id }}"
+          echo "To restore: aws rds restore-db-instance-from-db-snapshot --db-instance-identifier rupaya-prod --db-snapshot-identifier ${{ steps.backup.outputs.snapshot_id }}"

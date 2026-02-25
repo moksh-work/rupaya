@@ -1,0 +1,120 @@
+name: 02 - Mobile Build Check
+
+on:
+  push:
+    branches: 
+      - main
+      - feature/**
+    paths:
+      # - 'ios/**'
+      - 'android/**'
+      - 'shared/**'
+      - '!docs/**'
+      - '!**/*.md'
+  pull_request:
+    branches: [ main ]
+    paths:
+      # - 'ios/**'
+      - 'android/**'
+      - 'shared/**'
+      - '!docs/**'
+      - '!**/*.md'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # ios-build:
+  #   name: iOS Build & Tests
+  #   runs-on: macos-latest
+  #
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #
+  #     - name: Setup Ruby
+  #       uses: ruby/setup-ruby@v1
+  #       with:
+  #         ruby-version: '3.0'
+  #         bundler-cache: true
+  #
+  #     - name: Cache CocoaPods
+  #       uses: actions/cache@v4
+  #       with:
+  #         path: ios/Pods
+  #         key: ${{ runner.os }}-pods-${{ hashFiles('ios/Podfile.lock') }}
+  #         restore-keys: |
+  #           ${{ runner.os }}-pods-
+  #
+  #     - name: Install CocoaPods
+  #       run: |
+  #         cd ios
+  #         pod install
+  #
+  #     - name: Build iOS app
+  #       run: |
+  #         cd ios
+  #         /Users/rsingh/.local/share/gem/ruby/4.0.0/bin/fastlane build_debug
+  #
+  #     # Note: iOS tests skipped due to GitHub Actions environment limitations
+  #     # Run locally with: xcodebuild test
+  #
+  #     - name: Upload test results
+  #       if: failure()
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: ios-test-results
+  #         path: ios/TestResults.xcresult
+
+  android-build:
+    name: Android Build & Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+      
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+      
+      - name: Run lint checks
+        run: |
+          cd android
+          ./gradlew lint
+      
+      - name: Build debug APK
+        run: |
+          cd android
+          ./gradlew assembleDebug
+      
+      - name: Run unit tests
+        run: |
+          cd android
+          ./gradlew test
+      
+      # Note: Instrumented tests skipped (require Android emulator)
+      # Run locally with: ./gradlew connectedAndroidTest
+      
+      - name: Upload build artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: android/app/build/outputs/apk/debug/
+
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-test-results
+          path: android/app/build/reports/
