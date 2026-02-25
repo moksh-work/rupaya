@@ -172,6 +172,45 @@ detect_github_org_repo() {
     prompt_github_org_repo
 }
 
+# ============================================================================
+# Environment Selection
+# ============================================================================
+
+select_environment() {
+    log_info "Select environment(s) to deploy OIDC role(s):"
+    echo ""
+    echo "  1) Development only"
+    echo "  2) Staging only"
+    echo "  3) Production only"
+    echo "  4) All environments (dev, staging, prod)"
+    echo ""
+    read -p "Enter choice [1-4]: " env_choice
+    
+    case $env_choice in
+        1)
+            DEPLOY_ENVIRONMENTS="development"
+            log_success "Selected: Development"
+            ;;
+        2)
+            DEPLOY_ENVIRONMENTS="staging"
+            log_success "Selected: Staging"
+            ;;
+        3)
+            DEPLOY_ENVIRONMENTS="production"
+            log_success "Selected: Production"
+            ;;
+        4)
+            DEPLOY_ENVIRONMENTS="all"
+            log_success "Selected: All environments"
+            ;;
+        *)
+            log_error "Invalid choice. Exiting."
+            exit 1
+            ;;
+    esac
+    echo ""
+}
+
 prompt_github_org_repo() {
     echo ""
     read -p "Enter GitHub organization name: " GITHUB_ORG
@@ -197,7 +236,7 @@ get_aws_account_id() {
 # ============================================================================
 
 apply_terraform() {
-    log_info "Creating AWS IAM OIDC roles (dev, staging, prod) via Terraform..."
+    log_info "Creating AWS IAM OIDC role(s) via Terraform..."
     
     if [ ! -f "infra/aws/terraform/aws-oidc-role.tf" ]; then
         log_error "File not found: infra/aws/terraform/aws-oidc-role.tf"
@@ -209,11 +248,18 @@ apply_terraform() {
     log_info "Running terraform init..."
     terraform init
     
-    log_info "Running terraform plan..."
+    # Build terraform targets based on selected environment
+    local targets="-target=aws_iam_openid_connect_provider.github"
+    
+    if [ "$DEPLOY_ENVIRONMENTS" = "all" ]; then
+        targets="$targets -target=aws_iam_role.github_oidc -target=aws_iam_role_policy.github_oidc_inline"
+    else
+        targets="$targets -target=aws_iam_role.github_oidc[\"$DEPLOY_ENVIRONMENTS\"] -target=aws_iam_role_policy.github_oidc_inline[\"$DEPLOY_ENVIRONMENTS\"]"
+    fi
+    
+    log_info "Running terraform plan for: $DEPLOY_ENVIRONMENTS..."
     terraform plan \
-        -target=aws_iam_openid_connect_provider.github \
-        -target=aws_iam_role.github_oidc \
-        -target=aws_iam_role_policy.github_oidc_inline \
+        $targets \
         -var="github_org=$GITHUB_ORG" \
         -out=tfplan.oidc
     
@@ -228,14 +274,21 @@ apply_terraform() {
     log_info "Applying Terraform..."
     terraform apply tfplan.oidc
     
-    # Get role ARNs from output
-    OIDC_ROLE_ARN_DEV=$(terraform output -raw github_oidc_role_arn_development 2>/dev/null)
-    OIDC_ROLE_ARN_STAGING=$(terraform output -raw github_oidc_role_arn_staging 2>/dev/null)
-    OIDC_ROLE_ARN_PROD=$(terraform output -raw github_oidc_role_arn_production 2>/dev/null)
+    # Get role ARNs from output based on selected environment
+    if [ "$DEPLOY_ENVIRONMENTS" = "all" ] || [ "$DEPLOY_ENVIRONMENTS" = "development" ]; then
+        OIDC_ROLE_ARN_DEV=$(terraform output -raw github_oidc_role_arn_development 2>/dev/null)
+        log_success "Development OIDC Role ARN: $OIDC_ROLE_ARN_DEV"
+    fi
     
-    log_success "Development OIDC Role ARN: $OIDC_ROLE_ARN_DEV"
-    log_success "Staging OIDC Role ARN: $OIDC_ROLE_ARN_STAGING"
-    log_success "Production OIDC Role ARN: $OIDC_ROLE_ARN_PROD"
+    if [ "$DEPLOY_ENVIRONMENTS" = "all" ] || [ "$DEPLOY_ENVIRONMENTS" = "staging" ]; then
+        OIDC_ROLE_ARN_STAGING=$(terraform output -raw github_oidc_role_arn_staging 2>/dev/null)
+        log_success "Staging OIDC Role ARN: $OIDC_ROLE_ARN_STAGING"
+    fi
+    
+    if [ "$DEPLOY_ENVIRONMENTS" = "all" ] || [ "$DEPLOY_ENVIRONMENTS" = "production" ]; then
+        OIDC_ROLE_ARN_PROD=$(terraform output -raw github_oidc_role_arn_production 2>/dev/null)
+        log_success "Production OIDC Role ARN: $OIDC_ROLE_ARN_PROD"
+    fi
     
     # Clean up plan file
     rm -f tfplan.oidc
@@ -249,37 +302,43 @@ apply_terraform() {
 # ============================================================================
 
 create_github_secret() {
-    log_info "Creating GitHub repository secrets for OIDC roles..."
+    log_info "Creating GitHub repository secret(s) for selected environment(s)..."
     
     # Development secret
-    log_info "Creating AWS_OIDC_ROLE_ARN_DEV..."
-    if gh secret list --repo "$GITHUB_ORG/$GITHUB_REPO" 2>/dev/null | grep -q AWS_OIDC_ROLE_ARN_DEV; then
-        log_warn "Secret AWS_OIDC_ROLE_ARN_DEV already exists, updating..."
+    if [ "$DEPLOY_ENVIRONMENTS" = "all" ] || [ "$DEPLOY_ENVIRONMENTS" = "development" ]; then
+        log_info "Creating AWS_OIDC_ROLE_ARN_DEV..."
+        if gh secret list --repo "$GITHUB_ORG/$GITHUB_REPO" 2>/dev/null | grep -q AWS_OIDC_ROLE_ARN_DEV; then
+            log_warn "Secret AWS_OIDC_ROLE_ARN_DEV already exists, updating..."
+        fi
+        echo "$OIDC_ROLE_ARN_DEV" | gh secret set AWS_OIDC_ROLE_ARN_DEV \
+            --repo "$GITHUB_ORG/$GITHUB_REPO" \
+            --body -
+        log_success "AWS_OIDC_ROLE_ARN_DEV created"
     fi
-    echo "$OIDC_ROLE_ARN_DEV" | gh secret set AWS_OIDC_ROLE_ARN_DEV \
-        --repo "$GITHUB_ORG/$GITHUB_REPO" \
-        --body -
-    log_success "AWS_OIDC_ROLE_ARN_DEV created"
     
     # Staging secret
-    log_info "Creating AWS_OIDC_ROLE_ARN_STAGING..."
-    if gh secret list --repo "$GITHUB_ORG/$GITHUB_REPO" 2>/dev/null | grep -q AWS_OIDC_ROLE_ARN_STAGING; then
-        log_warn "Secret AWS_OIDC_ROLE_ARN_STAGING already exists, updating..."
+    if [ "$DEPLOY_ENVIRONMENTS" = "all" ] || [ "$DEPLOY_ENVIRONMENTS" = "staging" ]; then
+        log_info "Creating AWS_OIDC_ROLE_ARN_STAGING..."
+        if gh secret list --repo "$GITHUB_ORG/$GITHUB_REPO" 2>/dev/null | grep -q AWS_OIDC_ROLE_ARN_STAGING; then
+            log_warn "Secret AWS_OIDC_ROLE_ARN_STAGING already exists, updating..."
+        fi
+        echo "$OIDC_ROLE_ARN_STAGING" | gh secret set AWS_OIDC_ROLE_ARN_STAGING \
+            --repo "$GITHUB_ORG/$GITHUB_REPO" \
+            --body -
+        log_success "AWS_OIDC_ROLE_ARN_STAGING created"
     fi
-    echo "$OIDC_ROLE_ARN_STAGING" | gh secret set AWS_OIDC_ROLE_ARN_STAGING \
-        --repo "$GITHUB_ORG/$GITHUB_REPO" \
-        --body -
-    log_success "AWS_OIDC_ROLE_ARN_STAGING created"
     
     # Production secret
-    log_info "Creating AWS_OIDC_ROLE_ARN_PROD..."
-    if gh secret list --repo "$GITHUB_ORG/$GITHUB_REPO" 2>/dev/null | grep -q AWS_OIDC_ROLE_ARN_PROD; then
-        log_warn "Secret AWS_OIDC_ROLE_ARN_PROD already exists, updating..."
+    if [ "$DEPLOY_ENVIRONMENTS" = "all" ] || [ "$DEPLOY_ENVIRONMENTS" = "production" ]; then
+        log_info "Creating AWS_OIDC_ROLE_ARN_PROD..."
+        if gh secret list --repo "$GITHUB_ORG/$GITHUB_REPO" 2>/dev/null | grep -q AWS_OIDC_ROLE_ARN_PROD; then
+            log_warn "Secret AWS_OIDC_ROLE_ARN_PROD already exists, updating..."
+        fi
+        echo "$OIDC_ROLE_ARN_PROD" | gh secret set AWS_OIDC_ROLE_ARN_PROD \
+            --repo "$GITHUB_ORG/$GITHUB_REPO" \
+            --body -
+        log_success "AWS_OIDC_ROLE_ARN_PROD created"
     fi
-    echo "$OIDC_ROLE_ARN_PROD" | gh secret set AWS_OIDC_ROLE_ARN_PROD \
-        --repo "$GITHUB_ORG/$GITHUB_REPO" \
-        --body -
-    log_success "AWS_OIDC_ROLE_ARN_PROD created"
     
     echo ""
 }
@@ -296,37 +355,43 @@ create_github_environments() {
     DOCKER_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
     
     # Development Environment
-    log_info "Creating development environment..."
-    create_environment "development" \
-        "DEV_ECS_CLUSTER=rupaya-dev-cluster" \
-        "DEV_ECS_SERVICE=rupaya-backend-dev" \
-        "DEV_ECS_TASK_FAMILY=rupaya-backend-dev" \
-        "DEV_API_BASE_URL=https://api-dev.rupaya.io" \
-        "DEV_DOCKER_REGISTRY=$DOCKER_REGISTRY" \
-        "AWS_REGION=$AWS_REGION"
-    log_success "Development environment created"
+    if [ "$DEPLOY_ENVIRONMENTS" = "all" ] || [ "$DEPLOY_ENVIRONMENTS" = "development" ]; then
+        log_info "Creating development environment..."
+        create_environment "development" \
+            "DEV_ECS_CLUSTER=rupaya-dev-cluster" \
+            "DEV_ECS_SERVICE=rupaya-backend-dev" \
+            "DEV_ECS_TASK_FAMILY=rupaya-backend-dev" \
+            "DEV_API_BASE_URL=https://api-dev.rupaya.io" \
+            "DEV_DOCKER_REGISTRY=$DOCKER_REGISTRY" \
+            "AWS_REGION=$AWS_REGION"
+        log_success "Development environment instructions provided"
+    fi
     
     # Staging Environment
-    log_info "Creating staging environment..."
-    create_environment "staging" \
-        "STAGING_ECS_CLUSTER=rupaya-staging-cluster" \
-        "STAGING_ECS_SERVICE=rupaya-backend-staging" \
-        "STAGING_ECS_TASK_FAMILY=rupaya-backend-staging" \
-        "STAGING_API_BASE_URL=https://api-staging.rupaya.io" \
-        "STAGING_DOCKER_REGISTRY=$DOCKER_REGISTRY" \
-        "AWS_REGION=$AWS_REGION"
-    log_success "Staging environment created"
+    if [ "$DEPLOY_ENVIRONMENTS" = "all" ] || [ "$DEPLOY_ENVIRONMENTS" = "staging" ]; then
+        log_info "Creating staging environment..."
+        create_environment "staging" \
+            "STAGING_ECS_CLUSTER=rupaya-staging-cluster" \
+            "STAGING_ECS_SERVICE=rupaya-backend-staging" \
+            "STAGING_ECS_TASK_FAMILY=rupaya-backend-staging" \
+            "STAGING_API_BASE_URL=https://api-staging.rupaya.io" \
+            "STAGING_DOCKER_REGISTRY=$DOCKER_REGISTRY" \
+            "AWS_REGION=$AWS_REGION"
+        log_success "Staging environment instructions provided"
+    fi
     
     # Production Environment
-    log_info "Creating production environment..."
-    create_environment "production" \
-        "PROD_ECS_CLUSTER=rupaya-prod-cluster" \
-        "PROD_ECS_SERVICE=rupaya-backend-prod" \
-        "PROD_ECS_TASK_FAMILY=rupaya-backend-prod" \
-        "PROD_API_BASE_URL=https://api.rupaya.io" \
-        "PROD_DOCKER_REGISTRY=$DOCKER_REGISTRY" \
-        "AWS_REGION=$AWS_REGION"
-    log_success "Production environment created"
+    if [ "$DEPLOY_ENVIRONMENTS" = "all" ] || [ "$DEPLOY_ENVIRONMENTS" = "production" ]; then
+        log_info "Creating production environment..."
+        create_environment "production" \
+            "PROD_ECS_CLUSTER=rupaya-prod-cluster" \
+            "PROD_ECS_SERVICE=rupaya-backend-prod" \
+            "PROD_ECS_TASK_FAMILY=rupaya-backend-prod" \
+            "PROD_API_BASE_URL=https://api.rupaya.io" \
+            "PROD_DOCKER_REGISTRY=$DOCKER_REGISTRY" \
+            "AWS_REGION=$AWS_REGION"
+        log_success "Production environment instructions provided"
+    fi
     
     echo ""
 }
@@ -385,15 +450,34 @@ print_summary() {
     echo ""
     echo "✅ Completed:"
     echo "   1. AWS IAM OIDC Provider created"
-    echo "   2. IAM Roles created:"
-    echo "      - rupaya-github-oidc-dev (development)"
-    echo "      - rupaya-github-oidc-staging (staging)"
-    echo "      - rupaya-github-oidc-prod (production)"
-    echo "   3. GitHub secrets stored:"
-    echo "      - AWS_OIDC_ROLE_ARN_DEV"
-    echo "      - AWS_OIDC_ROLE_ARN_STAGING"
-    echo "      - AWS_OIDC_ROLE_ARN_PROD"
-    echo "   4. GitHub environments created (manual setup needed)"
+    
+    if [ "$DEPLOY_ENVIRONMENTS" = "all" ]; then
+        echo "   2. IAM Roles created:"
+        echo "      - rupaya-github-oidc-dev (development)"
+        echo "      - rupaya-github-oidc-staging (staging)"
+        echo "      - rupaya-github-oidc-prod (production)"
+        echo "   3. GitHub secrets stored:"
+        echo "      - AWS_OIDC_ROLE_ARN_DEV"
+        echo "      - AWS_OIDC_ROLE_ARN_STAGING"
+        echo "      - AWS_OIDC_ROLE_ARN_PROD"
+    elif [ "$DEPLOY_ENVIRONMENTS" = "development" ]; then
+        echo "   2. IAM Role created:"
+        echo "      - rupaya-github-oidc-dev (development)"
+        echo "   3. GitHub secret stored:"
+        echo "      - AWS_OIDC_ROLE_ARN_DEV"
+    elif [ "$DEPLOY_ENVIRONMENTS" = "staging" ]; then
+        echo "   2. IAM Role created:"
+        echo "      - rupaya-github-oidc-staging (staging)"
+        echo "   3. GitHub secret stored:"
+        echo "      - AWS_OIDC_ROLE_ARN_STAGING"
+    elif [ "$DEPLOY_ENVIRONMENTS" = "production" ]; then
+        echo "   2. IAM Role created:"
+        echo "      - rupaya-github-oidc-prod (production)"
+        echo "   3. GitHub secret stored:"
+        echo "      - AWS_OIDC_ROLE_ARN_PROD"
+    fi
+    
+    echo "   4. GitHub environments (manual setup needed)"
     echo ""
     echo "📝 Next Steps:"
     echo "   1. Create GitHub environments manually (see instructions above)"
@@ -404,9 +488,19 @@ print_summary() {
     echo "🚀 After OIDC is verified:"
     echo "   1. Run Terraform for infrastructure (workflow 09)"
     echo "   2. Run RDS migrations (workflow 10)"
-    echo "   3. Deploy to dev via PR (workflow 05) → uses AWS_OIDC_ROLE_ARN_DEV"
-    echo "   4. Deploy to staging via release branch (workflow 06) → uses AWS_OIDC_ROLE_ARN_STAGING"
-    echo "   5. Deploy to prod via main push (workflow 07) → uses AWS_OIDC_ROLE_ARN_PROD"
+    
+    if [ "$DEPLOY_ENVIRONMENTS" = "all" ]; then
+        echo "   3. Deploy to dev via PR (workflow 05) → uses AWS_OIDC_ROLE_ARN_DEV"
+        echo "   4. Deploy to staging via release branch (workflow 06) → uses AWS_OIDC_ROLE_ARN_STAGING"
+        echo "   5. Deploy to prod via main push (workflow 07) → uses AWS_OIDC_ROLE_ARN_PROD"
+    elif [ "$DEPLOY_ENVIRONMENTS" = "development" ]; then
+        echo "   3. Deploy to dev via PR (workflow 05) → uses AWS_OIDC_ROLE_ARN_DEV"
+    elif [ "$DEPLOY_ENVIRONMENTS" = "staging" ]; then
+        echo "   3. Deploy to staging via release branch (workflow 06) → uses AWS_OIDC_ROLE_ARN_STAGING"
+    elif [ "$DEPLOY_ENVIRONMENTS" = "production" ]; then
+        echo "   3. Deploy to prod via main push (workflow 07) → uses AWS_OIDC_ROLE_ARN_PROD"
+    fi
+    
     echo ""
     echo "📚 Reference: docs/AWS_OIDC_QUICKSTART.md"
     echo "=========================================="
@@ -428,6 +522,7 @@ main() {
     check_aws_credentials
     check_github_auth
     detect_github_org_repo
+    select_environment
     
     apply_terraform
     create_github_secret
