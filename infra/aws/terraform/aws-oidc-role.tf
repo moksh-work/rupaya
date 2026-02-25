@@ -358,15 +358,15 @@ output "github_oidc_role_arns" {
 
 output "github_oidc_role_arn_development" {
   description = "ARN of development OIDC role - use in AWS_OIDC_ROLE_ARN_DEV secret"
-  value       = aws_iam_role.github_oidc["development"].arn
+  value       = try(aws_iam_role.github_oidc["development"].arn, null)
 }
 
 output "github_oidc_role_arn_staging" {
   description = "ARN of staging OIDC role - use in AWS_OIDC_ROLE_ARN_STAGING secret"
-  value       = aws_iam_role.github_oidc["staging"].arn
+  value       = try(aws_iam_role.github_oidc["staging"].arn, null)
 }
 
 output "github_oidc_role_arn_production" {
   description = "ARN of production OIDC role - use in AWS_OIDC_ROLE_ARN_PROD secret"
-  value       = aws_iam_role.github_oidc["production"].arn
+  value       = try(aws_iam_role.github_oidc["production"].arn, null)
 }
