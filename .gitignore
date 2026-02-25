@@ -98,4 +98,5 @@ temp/
 **/*.tfvars
 **/*.tfvars.json
 **/tfplan
+**/tfplan.*
 **/tfplan-*

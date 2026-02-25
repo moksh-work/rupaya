@@ -28,6 +28,13 @@
 set -e
 
 # ============================================================================
+# Global Variables
+# ============================================================================
+
+AUTO_APPROVE=false
+ENV_ARG=""
+
+# ============================================================================
 # Help & Usage
 # ============================================================================
 
@@ -44,6 +51,10 @@ USAGE
 
 OPTIONS
     -h, --help          Show this help message and exit
+    --env ENV           Environment: development, staging, production, or all
+                        (skips interactive prompt)
+    --auto-approve      Skip terraform apply confirmation
+                        (use with caution in automation)
 
 WHAT THIS SCRIPT DOES
     1. Checks prerequisites (AWS CLI, Terraform, GitHub CLI)
@@ -72,6 +83,12 @@ EXAMPLES
     # Show help
     ./scripts/bootstrap-oidc.sh --help
 
+    # Non-interactive: create dev role only
+    ./scripts/bootstrap-oidc.sh --env=development --auto-approve
+
+    # Non-interactive: create all roles
+    ./scripts/bootstrap-oidc.sh --env=all --auto-approve
+
 ENVIRONMENT SELECTION
     During execution, you'll choose which environment(s) to deploy:
     
@@ -97,6 +114,51 @@ DOCUMENTATION
 
 EOF
     exit 0
+}
+
+# ============================================================================
+# Parse Arguments
+# ============================================================================
+
+parse_arguments() {
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -h|--help)
+                show_help
+                ;;
+            --env=*)
+                ENV_ARG="${1#*=}"
+                shift
+                ;;
+            --env)
+                ENV_ARG="$2"
+                shift 2
+                ;;
+            --auto-approve)
+                AUTO_APPROVE=true
+                shift
+                ;;
+            *)
+                log_error "Unknown option: $1"
+                echo "Use --help for usage information"
+                exit 1
+                ;;
+        esac
+    done
+    
+    # Validate ENV_ARG if provided
+    if [ -n "$ENV_ARG" ]; then
+        case $ENV_ARG in
+            development|staging|production|all)
+                # Valid
+                ;;
+            *)
+                log_error "Invalid --env value: $ENV_ARG"
+                echo "Valid values: development, staging, production, all"
+                exit 1
+                ;;
+        esac
+    fi
 }
 
 # ============================================================================
@@ -252,6 +314,15 @@ detect_github_org_repo() {
 # ============================================================================
 
 select_environment() {
+    # If --env flag provided, use it directly
+    if [ -n "$ENV_ARG" ]; then
+        DEPLOY_ENVIRONMENTS="$ENV_ARG"
+        log_info "Environment: $DEPLOY_ENVIRONMENTS (from --env flag)"
+        echo ""
+        return
+    fi
+    
+    # Interactive mode
     log_info "Select environment(s) to deploy OIDC role(s):"
     echo ""
     echo "  1) Development only"
@@ -339,11 +410,17 @@ apply_terraform() {
         -out=tfplan.oidc
     
     echo ""
-    read -p "Review plan above. Apply? (yes/no): " confirm
-    if [[ "$confirm" != "yes" ]]; then
-        log_warn "Terraform apply cancelled"
-        cd - > /dev/null
-        exit 1
+    
+    # Skip confirmation if --auto-approve flag is set
+    if [ "$AUTO_APPROVE" = true ]; then
+        log_info "Auto-approving terraform apply (--auto-approve flag set)"
+    else
+        read -p "Review plan above. Apply? (yes/no): " confirm
+        if [[ "$confirm" != "yes" ]]; then
+            log_warn "Terraform apply cancelled"
+            cd - > /dev/null
+            exit 1
+        fi
     fi
     
     log_info "Applying Terraform..."
@@ -593,6 +670,8 @@ main() {
     echo "=========================================="
     echo ""
     
+    parse_arguments "$@"
+    
     check_prerequisites
     check_aws_credentials
     check_github_auth
@@ -608,10 +687,5 @@ main() {
 
 # Run main if not sourced
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    # Check for help flag
-    if [[ "$1" == "-h" ]] || [[ "$1" == "--help" ]]; then
-        show_help
-    fi
-    
     main "$@"
 fi
