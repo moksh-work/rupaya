@@ -7,13 +7,16 @@
 #   - Validates prerequisites (AWS CLI, Terraform, GitHub CLI)
 #   - Confirms AWS credentials
 #   - Sets GitHub org name
-#   - Creates IAM OIDC provider + role
-#   - Stores role ARN in GitHub secret
+#   - Creates IAM OIDC provider + role(s) per environment
+#   - Stores role ARN(s) in GitHub secret(s)
 #   - Creates dev/staging/prod GitHub environments
 #   - Tests OIDC authentication
 #
 # Usage:
-#   ./scripts/bootstrap-oidc.sh
+#   ./scripts/bootstrap-oidc.sh [options]
+#
+# Options:
+#   -h, --help     Show this help message and exit
 #
 # Requirements:
 #   - AWS CLI (aws --version)
@@ -23,6 +26,78 @@
 #   - Authenticated with GitHub (gh auth status)
 
 set -e
+
+# ============================================================================
+# Help & Usage
+# ============================================================================
+
+show_help() {
+    cat << EOF
+AWS OIDC Bootstrap Script - GitHub Actions Authentication
+
+DESCRIPTION
+    Automates secure AWS authentication for GitHub Actions using OIDC federation.
+    Creates IAM roles per environment (dev, staging, prod) without storing credentials.
+
+USAGE
+    ./scripts/bootstrap-oidc.sh [options]
+
+OPTIONS
+    -h, --help          Show this help message and exit
+
+WHAT THIS SCRIPT DOES
+    1. Checks prerequisites (AWS CLI, Terraform, GitHub CLI)
+    2. Validates AWS credentials
+    3. Detects GitHub org/repo from git remote
+    4. Prompts for environment selection:
+       - Development only
+       - Staging only
+       - Production only
+       - All environments
+    5. Creates IAM OIDC provider + selected role(s) via Terraform
+    6. Stores role ARN(s) in GitHub secrets
+    7. Provides instructions for GitHub environment setup
+    8. Triggers OIDC test workflow
+
+REQUIREMENTS
+    - AWS CLI installed and configured
+    - Terraform >= 1.6
+    - GitHub CLI authenticated (gh auth login)
+    - AWS IAM permissions to create OIDC providers and roles
+
+EXAMPLES
+    # Run interactive setup
+    ./scripts/bootstrap-oidc.sh
+
+    # Show help
+    ./scripts/bootstrap-oidc.sh --help
+
+ENVIRONMENT SELECTION
+    During execution, you'll choose which environment(s) to deploy:
+    
+    [1] Development only     → Creates rupaya-github-oidc-dev
+    [2] Staging only         → Creates rupaya-github-oidc-staging
+    [3] Production only      → Creates rupaya-github-oidc-prod
+    [4] All environments     → Creates all three roles
+
+GITHUB SECRETS CREATED
+    - AWS_OIDC_ROLE_ARN_DEV       (for development deployments)
+    - AWS_OIDC_ROLE_ARN_STAGING   (for staging deployments)
+    - AWS_OIDC_ROLE_ARN_PROD      (for production deployments)
+
+IAM ROLES CREATED
+    - rupaya-github-oidc-dev       (allowed: develop, feature/* branches)
+    - rupaya-github-oidc-staging   (allowed: release/* branches)
+    - rupaya-github-oidc-prod      (allowed: main branch)
+
+DOCUMENTATION
+    - Full guide:       docs/AWS_OIDC_SETUP.md
+    - Quick start:      docs/AWS_OIDC_QUICKSTART.md
+    - Script usage:     scripts/README.md
+
+EOF
+    exit 0
+}
 
 # ============================================================================
 # Colors & Output
@@ -533,5 +608,10 @@ main() {
 
 # Run main if not sourced
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    # Check for help flag
+    if [[ "$1" == "-h" ]] || [[ "$1" == "--help" ]]; then
+        show_help
+    fi
+    
     main "$@"
 fi
