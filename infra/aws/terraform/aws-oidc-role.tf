@@ -48,22 +48,30 @@ variable "github_repo" {
   default     = "rupaya"
 }
 
-variable "oidc_role_name" {
-  description = "Name of IAM role for OIDC"
-  type        = string
-  default     = "rupaya-github-oidc"
-}
-
-variable "allowed_branches" {
-  description = "GitHub branches allowed to assume role"
-  type        = list(string)
-  default     = ["develop", "main", "release/*"]
-}
-
-variable "allowed_environments" {
-  description = "GitHub environments allowed to assume role"
-  type        = list(string)
-  default     = ["development", "staging", "production"]
+variable "environments" {
+  description = "Environments to create OIDC roles for"
+  type = map(object({
+    role_name            = string
+    allowed_branches     = list(string)
+    github_environment   = string
+  }))
+  default = {
+    development = {
+      role_name            = "rupaya-github-oidc-dev"
+      allowed_branches     = ["develop", "feature/*"]
+      github_environment   = "development"
+    }
+    staging = {
+      role_name            = "rupaya-github-oidc-staging"
+      allowed_branches     = ["release/*"]
+      github_environment   = "staging"
+    }
+    production = {
+      role_name            = "rupaya-github-oidc-prod"
+      allowed_branches     = ["main"]
+      github_environment   = "production"
+    }
+  }
 }
 
 # ============================================================================
@@ -95,12 +103,14 @@ resource "aws_iam_openid_connect_provider" "github" {
 }
 
 # ============================================================================
-# Trust Policy (Assume Role)
+# Trust Policy (Assume Role) - Per Environment
 # ============================================================================
 
 data "aws_iam_policy_document" "github_assume_role" {
+  for_each = var.environments
+
   statement {
-    sid     = "AllowGitHubOIDCRupaya"
+    sid     = "AllowGitHubOIDCRupaya${title(each.key)}"
     effect  = "Allow"
     actions = ["sts:AssumeRole"]
 
@@ -119,23 +129,26 @@ data "aws_iam_policy_document" "github_assume_role" {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
       values = concat(
-        [for branch in var.allowed_branches : "repo:${var.github_org}/${var.github_repo}:ref:refs/heads/${branch}"],
-        [for env in var.allowed_environments : "repo:${var.github_org}/${var.github_repo}:environment:${env}"]
+        [for branch in each.value.allowed_branches : "repo:${var.github_org}/${var.github_repo}:ref:refs/heads/${branch}"],
+        ["repo:${var.github_org}/${var.github_repo}:environment:${each.value.github_environment}"]
       )
     }
   }
 }
 
 # ============================================================================
-# IAM Role
+# IAM Roles - Per Environment
 # ============================================================================
 
 resource "aws_iam_role" "github_oidc" {
-  name               = var.oidc_role_name
-  assume_role_policy = data.aws_iam_policy_document.github_assume_role.json
+  for_each = var.environments
+
+  name               = each.value.role_name
+  assume_role_policy = data.aws_iam_policy_document.github_assume_role[each.key].json
 
   tags = {
-    Name        = var.oidc_role_name
+    Name        = each.value.role_name
+    Environment = each.key
     Component   = "ci-cd"
     ManagedBy   = "terraform"
   }
@@ -173,10 +186,12 @@ data "aws_iam_policy_document" "ecr_policy" {
 }
 
 # ============================================================================
-# Inline Policy: ECS Access
+# Inline Policy: ECS Access - Per Environment
 # ============================================================================
 
 data "aws_iam_policy_document" "ecs_policy" {
+  for_each = var.environments
+
   statement {
     sid    = "ECSUpdateService"
     effect = "Allow"
@@ -188,10 +203,8 @@ data "aws_iam_policy_document" "ecs_policy" {
       "ecs:ListTaskDefinitions"
     ]
     resources = [
-      "arn:aws:ecs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:service/rupaya-dev/*",
-      "arn:aws:ecs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:service/rupaya-staging/*",
-      "arn:aws:ecs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:service/rupaya-prod/*",
-      "arn:aws:ecs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:task-definition/rupaya*"
+      "arn:aws:ecs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:service/rupaya-${each.key}/*",
+      "arn:aws:ecs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:task-definition/rupaya-*-${each.key}*"
     ]
   }
 
@@ -305,18 +318,20 @@ data "aws_iam_policy_document" "secrets_policy" {
 }
 
 # ============================================================================
-# Attach Policies to Role
+# Attach Policies to Roles - Per Environment
 # ============================================================================
 
 resource "aws_iam_role_policy" "github_oidc_inline" {
-  name = "${var.oidc_role_name}-policy"
-  role = aws_iam_role.github_oidc.id
+  for_each = var.environments
+
+  name = "${each.value.role_name}-policy"
+  role = aws_iam_role.github_oidc[each.key].id
 
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = concat(
       jsondecode(data.aws_iam_policy_document.ecr_policy.json).Statement,
-      jsondecode(data.aws_iam_policy_document.ecs_policy.json).Statement,
+      jsondecode(data.aws_iam_policy_document.ecs_policy[each.key].json).Statement,
       jsondecode(data.aws_iam_policy_document.terraform_state_policy.json).Statement,
       jsondecode(data.aws_iam_policy_document.terraform_infra_policy.json).Statement,
       jsondecode(data.aws_iam_policy_document.rds_migrations_policy.json).Statement,
@@ -334,12 +349,24 @@ output "github_oidc_provider_arn" {
   value       = aws_iam_openid_connect_provider.github.arn
 }
 
-output "github_oidc_role_arn" {
-  description = "ARN of GitHub OIDC role - use in AWS_OIDC_ROLE_ARN secret"
-  value       = aws_iam_role.github_oidc.arn
+output "github_oidc_role_arns" {
+  description = "ARNs of GitHub OIDC roles per environment"
+  value = {
+    for env, role in aws_iam_role.github_oidc : env => role.arn
+  }
 }
 
-output "github_oidc_role_name" {
-  description = "Name of GitHub OIDC role"
-  value       = aws_iam_role.github_oidc.name
+output "github_oidc_role_arn_development" {
+  description = "ARN of development OIDC role - use in AWS_OIDC_ROLE_ARN_DEV secret"
+  value       = aws_iam_role.github_oidc["development"].arn
+}
+
+output "github_oidc_role_arn_staging" {
+  description = "ARN of staging OIDC role - use in AWS_OIDC_ROLE_ARN_STAGING secret"
+  value       = aws_iam_role.github_oidc["staging"].arn
+}
+
+output "github_oidc_role_arn_production" {
+  description = "ARN of production OIDC role - use in AWS_OIDC_ROLE_ARN_PROD secret"
+  value       = aws_iam_role.github_oidc["production"].arn
 }

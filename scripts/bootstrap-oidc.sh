@@ -197,7 +197,7 @@ get_aws_account_id() {
 # ============================================================================
 
 apply_terraform() {
-    log_info "Creating AWS IAM OIDC role via Terraform..."
+    log_info "Creating AWS IAM OIDC roles (dev, staging, prod) via Terraform..."
     
     if [ ! -f "infra/aws/terraform/aws-oidc-role.tf" ]; then
         log_error "File not found: infra/aws/terraform/aws-oidc-role.tf"
@@ -228,9 +228,14 @@ apply_terraform() {
     log_info "Applying Terraform..."
     terraform apply tfplan.oidc
     
-    # Get role ARN from output
-    OIDC_ROLE_ARN=$(terraform output -raw github_oidc_role_arn 2>/dev/null)
-    log_success "OIDC Role ARN: $OIDC_ROLE_ARN"
+    # Get role ARNs from output
+    OIDC_ROLE_ARN_DEV=$(terraform output -raw github_oidc_role_arn_development 2>/dev/null)
+    OIDC_ROLE_ARN_STAGING=$(terraform output -raw github_oidc_role_arn_staging 2>/dev/null)
+    OIDC_ROLE_ARN_PROD=$(terraform output -raw github_oidc_role_arn_production 2>/dev/null)
+    
+    log_success "Development OIDC Role ARN: $OIDC_ROLE_ARN_DEV"
+    log_success "Staging OIDC Role ARN: $OIDC_ROLE_ARN_STAGING"
+    log_success "Production OIDC Role ARN: $OIDC_ROLE_ARN_PROD"
     
     # Clean up plan file
     rm -f tfplan.oidc
@@ -244,18 +249,38 @@ apply_terraform() {
 # ============================================================================
 
 create_github_secret() {
-    log_info "Creating GitHub repository secret: AWS_OIDC_ROLE_ARN"
+    log_info "Creating GitHub repository secrets for OIDC roles..."
     
-    # Check if secret already exists
-    if gh secret list --repo "$GITHUB_ORG/$GITHUB_REPO" 2>/dev/null | grep -q AWS_OIDC_ROLE_ARN; then
-        log_warn "Secret AWS_OIDC_ROLE_ARN already exists, updating..."
+    # Development secret
+    log_info "Creating AWS_OIDC_ROLE_ARN_DEV..."
+    if gh secret list --repo "$GITHUB_ORG/$GITHUB_REPO" 2>/dev/null | grep -q AWS_OIDC_ROLE_ARN_DEV; then
+        log_warn "Secret AWS_OIDC_ROLE_ARN_DEV already exists, updating..."
     fi
-    
-    echo "$OIDC_ROLE_ARN" | gh secret set AWS_OIDC_ROLE_ARN \
+    echo "$OIDC_ROLE_ARN_DEV" | gh secret set AWS_OIDC_ROLE_ARN_DEV \
         --repo "$GITHUB_ORG/$GITHUB_REPO" \
         --body -
+    log_success "AWS_OIDC_ROLE_ARN_DEV created"
     
-    log_success "GitHub secret created: AWS_OIDC_ROLE_ARN"
+    # Staging secret
+    log_info "Creating AWS_OIDC_ROLE_ARN_STAGING..."
+    if gh secret list --repo "$GITHUB_ORG/$GITHUB_REPO" 2>/dev/null | grep -q AWS_OIDC_ROLE_ARN_STAGING; then
+        log_warn "Secret AWS_OIDC_ROLE_ARN_STAGING already exists, updating..."
+    fi
+    echo "$OIDC_ROLE_ARN_STAGING" | gh secret set AWS_OIDC_ROLE_ARN_STAGING \
+        --repo "$GITHUB_ORG/$GITHUB_REPO" \
+        --body -
+    log_success "AWS_OIDC_ROLE_ARN_STAGING created"
+    
+    # Production secret
+    log_info "Creating AWS_OIDC_ROLE_ARN_PROD..."
+    if gh secret list --repo "$GITHUB_ORG/$GITHUB_REPO" 2>/dev/null | grep -q AWS_OIDC_ROLE_ARN_PROD; then
+        log_warn "Secret AWS_OIDC_ROLE_ARN_PROD already exists, updating..."
+    fi
+    echo "$OIDC_ROLE_ARN_PROD" | gh secret set AWS_OIDC_ROLE_ARN_PROD \
+        --repo "$GITHUB_ORG/$GITHUB_REPO" \
+        --body -
+    log_success "AWS_OIDC_ROLE_ARN_PROD created"
+    
     echo ""
 }
 
@@ -360,8 +385,14 @@ print_summary() {
     echo ""
     echo "✅ Completed:"
     echo "   1. AWS IAM OIDC Provider created"
-    echo "   2. IAM Role 'rupaya-github-oidc' created"
-    echo "   3. GitHub secret 'AWS_OIDC_ROLE_ARN' stored"
+    echo "   2. IAM Roles created:"
+    echo "      - rupaya-github-oidc-dev (development)"
+    echo "      - rupaya-github-oidc-staging (staging)"
+    echo "      - rupaya-github-oidc-prod (production)"
+    echo "   3. GitHub secrets stored:"
+    echo "      - AWS_OIDC_ROLE_ARN_DEV"
+    echo "      - AWS_OIDC_ROLE_ARN_STAGING"
+    echo "      - AWS_OIDC_ROLE_ARN_PROD"
     echo "   4. GitHub environments created (manual setup needed)"
     echo ""
     echo "📝 Next Steps:"
@@ -373,9 +404,9 @@ print_summary() {
     echo "🚀 After OIDC is verified:"
     echo "   1. Run Terraform for infrastructure (workflow 09)"
     echo "   2. Run RDS migrations (workflow 10)"
-    echo "   3. Deploy to dev via PR (workflow 05)"
-    echo "   4. Deploy to staging via release branch (workflow 06)"
-    echo "   5. Deploy to prod via main push (workflow 07)"
+    echo "   3. Deploy to dev via PR (workflow 05) → uses AWS_OIDC_ROLE_ARN_DEV"
+    echo "   4. Deploy to staging via release branch (workflow 06) → uses AWS_OIDC_ROLE_ARN_STAGING"
+    echo "   5. Deploy to prod via main push (workflow 07) → uses AWS_OIDC_ROLE_ARN_PROD"
     echo ""
     echo "📚 Reference: docs/AWS_OIDC_QUICKSTART.md"
     echo "=========================================="

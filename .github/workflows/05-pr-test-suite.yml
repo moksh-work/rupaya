@@ -24,7 +24,7 @@ permissions:
 
 env:
   AWS_REGION: us-east-1
-  AWS_ROLE_ARN: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+  AWS_ROLE_ARN: ${{ secrets.AWS_OIDC_ROLE_ARN_DEV }}
   ECR_REPOSITORY: rupaya-backend
 
 jobs:

@@ -2,25 +2,57 @@ name: Test OIDC Authentication
 
 on:
   workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to test (all, development, staging, production)'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - development
+          - staging
+          - production
   schedule:
     - cron: '0 3 * * 0'  # Weekly health check
 
 jobs:
   test-oidc:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        environment: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'all' && fromJSON('["development", "staging", "production"]') || github.event_name == 'schedule' && fromJSON('["development", "staging", "production"]') || fromJSON(format('["{0}"]', github.event.inputs.environment)) }}
+      fail-fast: false
+    environment: ${{ matrix.environment }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set Role ARN
+        id: role
+        run: |
+          case "${{ matrix.environment }}" in
+            development)
+              echo "role_arn=${{ secrets.AWS_OIDC_ROLE_ARN_DEV }}" >> $GITHUB_OUTPUT
+              ;;
+            staging)
+              echo "role_arn=${{ secrets.AWS_OIDC_ROLE_ARN_STAGING }}" >> $GITHUB_OUTPUT
+              ;;
+            production)
+              echo "role_arn=${{ secrets.AWS_OIDC_ROLE_ARN_PROD }}" >> $GITHUB_OUTPUT
+              ;;
+          esac
+
       - name: Configure AWS Credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          role-to-assume: ${{ steps.role.outputs.role_arn }}
           aws-region: us-east-1
 
       - name: Verify OIDC Authentication
         run: |
           set -e
+          echo "=== Testing ${{ matrix.environment }} Environment ==="
           echo "=== AWS Identity ==="
           IDENTITY=$(aws sts get-caller-identity)
           echo "$IDENTITY" | jq .
@@ -33,10 +65,11 @@ jobs:
           echo "✓ Account: $ACCOUNT_ID"
           echo "✓ Role: $ARN"
           
-          if [[ "$ARN" == *"rupaya-github-oidc"* ]]; then
-            echo "✓ Using GitHub OIDC role (not hardcoded credentials)"
+          # Verify correct role for environment
+          if [[ "$ARN" == *"rupaya-github-oidc-${{ matrix.environment == 'development' && 'dev' || matrix.environment }}"* ]]; then
+            echo "✓ Using correct ${{ matrix.environment }} OIDC role"
           else
-            echo "✗ ERROR: Not using rupaya-github-oidc role!"
+            echo "✗ ERROR: Not using correct role for ${{ matrix.environment }}!"
             exit 1
           fi
 
@@ -99,11 +132,17 @@ jobs:
         run: |
           echo ""
           echo "=========================================="
-          echo "✅ OIDC Authentication Test Complete"
+          echo "✅ OIDC Authentication Test Complete - ${{ matrix.environment }}"
           echo "=========================================="
           echo ""
+          echo "Environment: ${{ matrix.environment }}"
+          echo "Role ARN: ${{ steps.role.outputs.role_arn }}"
+          echo ""
           echo "Next steps:"
-          echo "1. Verify role ARN in AWS_OIDC_ROLE_ARN secret"
-          echo "2. Create development/staging/production environments"
-          echo "3. Workflows 05-07 will now work without hardcoded credentials"
+          echo "1. Verify all three role ARNs in GitHub secrets:"
+          echo "   - AWS_OIDC_ROLE_ARN_DEV (development)"
+          echo "   - AWS_OIDC_ROLE_ARN_STAGING (staging)"
+          echo "   - AWS_OIDC_ROLE_ARN_PROD (production)"
+          echo "2. Ensure development/staging/production environments exist"
+          echo "3. Workflows 05-07 will use environment-specific roles"
           echo ""
