@@ -176,6 +176,7 @@ data "aws_iam_policy_document" "ecr_policy" {
       "ecr:DescribeRepositories",
       "ecr:DescribeImages",
       "ecr:CreateRepository",
+      "ecr:TagResource",
       "ecr:BatchCheckLayerAvailability",
       "ecr:PutImage",
       "ecr:InitiateLayerUpload",
@@ -288,6 +289,7 @@ data "aws_iam_policy_document" "terraform_infra_policy" {
     effect = "Allow"
     actions = [
       "ec2:*",
+      "ecs:*",
       "rds:*",
       "elasticache:*",
       "acm:*",
@@ -295,6 +297,16 @@ data "aws_iam_policy_document" "terraform_infra_policy" {
       "logs:*",
       "autoscaling:*",
       "elasticloadbalancing:*",
+      "iam:CreateRole",
+      "iam:DeleteRole",
+      "iam:AttachRolePolicy",
+      "iam:DetachRolePolicy",
+      "iam:PutRolePolicy",
+      "iam:DeleteRolePolicy",
+      "iam:PassRole",
+      "iam:TagRole",
+      "iam:UntagRole",
+      "iam:CreateServiceLinkedRole",
       "iam:GetRole",
       "iam:ListRoles"
     ]

@@ -20,7 +20,7 @@ variable "project_name" {
 variable "postgres_version" {
   description = "PostgreSQL engine version"
   type        = string
-  default     = "15.4"
+  default     = "17.6"
 }
 
 variable "rds_instance_class" {
