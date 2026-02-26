@@ -163,6 +163,32 @@ jobs:
     runs-on: ubuntu-latest
     needs: [determine-environment, prerequisite-check]
     if: needs.determine-environment.outputs.deploy == 'true' && needs.prerequisite-check.outputs.ready == 'true'
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: rupaya_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -179,9 +205,16 @@ jobs:
           cd backend
           npm run lint --if-present
       - name: Unit tests (stable subset)
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgres://test_user:test_password@localhost:5432/rupaya_test
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: test-secret-key-minimum-32-characters-long
+          REFRESH_TOKEN_SECRET: test-refresh-secret-key-minimum-32-chars
+          ENCRYPTION_KEY: test-encryption-key-minimum-32-chars
         run: |
           cd backend
-          npm test -- --testPathIgnorePatterns='e2e|integration/feature-flags.test.js'
+          npm test -- --testPathIgnorePatterns='e2e|integration/feature-flags.test.js' --maxWorkers=2
 
   build-and-push:
     name: Build and Push Image
