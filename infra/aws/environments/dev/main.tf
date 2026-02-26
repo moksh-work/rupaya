@@ -177,7 +177,6 @@ resource "aws_db_instance" "rupaya_postgres_dev" {
   backup_window          = "03:00-04:00"
   maintenance_window     = "mon:04:00-mon:05:00"
 
-  enable_cloudwatch_logs_exports = ["postgresql"]
   enabled_cloudwatch_logs_exports = ["postgresql"]
 
   multi_az = false # Single AZ for cost savings in dev
@@ -208,9 +207,6 @@ resource "aws_elasticache_cluster" "rupaya_redis_dev" {
 
   subnet_group_name          = aws_elasticache_subnet_group.rupaya_dev.name
   security_group_ids         = [aws_security_group.redis_dev.id]
-  automatic_failover_enabled = false # Single node in dev
-
-  at_rest_encryption_enabled = true
   transit_encryption_enabled = false # Can enable if client supports
 
   maintenance_window = "mon:03:00-mon:04:00"
