@@ -207,10 +207,16 @@ data "aws_iam_policy_document" "ecs_policy" {
       "ecs:RegisterTaskDefinition",
       "ecs:ListTaskDefinitions"
     ]
-    resources = [
-      "arn:aws:ecs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:service/rupaya-${each.key}/*",
-      "arn:aws:ecs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:task-definition/rupaya-*-${each.key}*"
-    ]
+    resources = concat(
+      [
+        "arn:aws:ecs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:service/rupaya-${each.key}/*",
+        "arn:aws:ecs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:task-definition/rupaya-*-${each.key}*"
+      ],
+      each.key == "development" ? [
+        "arn:aws:ecs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:service/rupaya-dev/*",
+        "arn:aws:ecs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:task-definition/rupaya-*-dev*"
+      ] : []
+    )
   }
 
   statement {
