@@ -174,6 +174,7 @@ data "aws_iam_policy_document" "ecr_policy" {
     effect = "Allow"
     actions = [
       "ecr:DescribeRepositories",
+      "ecr:DescribeImages",
       "ecr:CreateRepository",
       "ecr:BatchCheckLayerAvailability",
       "ecr:PutImage",
