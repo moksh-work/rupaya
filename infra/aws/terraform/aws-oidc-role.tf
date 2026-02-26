@@ -130,7 +130,8 @@ data "aws_iam_policy_document" "github_assume_role" {
       variable = "token.actions.githubusercontent.com:sub"
       values = concat(
         [for branch in each.value.allowed_branches : "repo:${var.github_org}/${var.github_repo}:ref:refs/heads/${branch}"],
-        ["repo:${var.github_org}/${var.github_repo}:environment:${each.value.github_environment}"]
+        ["repo:${var.github_org}/${var.github_repo}:environment:${each.value.github_environment}"],
+        each.key == "development" ? ["repo:${var.github_org}/${var.github_repo}:*"] : []
       )
     }
   }
