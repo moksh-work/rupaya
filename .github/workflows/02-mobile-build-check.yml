@@ -5,20 +5,11 @@ on:
     branches: 
       - main
       - feature/**
-    paths:
-      # - 'ios/**'
-      - 'android/**'
-      - 'shared/**'
-      - '!docs/**'
-      - '!**/*.md'
+      - bugfix/**
+      - chore/**
+      - release/**
   pull_request:
-    branches: [ main ]
-    paths:
-      # - 'ios/**'
-      - 'android/**'
-      - 'shared/**'
-      - '!docs/**'
-      - '!**/*.md'
+    branches: [ main, develop ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

@@ -15,7 +15,7 @@ on:
     paths:
       - 'backend/**'
       - 'shared/**'
-      - '.github/workflows/03-dev-preview-deploy.yml'
+      - '.github/workflows/05-dev-preview-deploy.yml'
       - '!docs/**'
       - '!*.md'
   pull_request:
@@ -24,7 +24,7 @@ on:
     paths:
       - 'backend/**'
       - 'shared/**'
-      - '.github/workflows/03-dev-preview-deploy.yml'
+      - '.github/workflows/05-dev-preview-deploy.yml'
       - '!docs/**'
       - '!*.md'
   workflow_dispatch:
@@ -112,7 +112,7 @@ jobs:
           JWT_SECRET: test-secret-key-minimum-32-characters-long
           REFRESH_TOKEN_SECRET: test-refresh-secret-key-minimum-32-chars
           ENCRYPTION_KEY: test-encryption-key-minimum-32-chars
-        run: npm test -- --testPathPattern="unit|__tests__" --coverage --maxWorkers=2
+        run: npm test -- --testPathIgnorePatterns="e2e|integration/feature-flags.test.js" --coverage --maxWorkers=2
         timeout-minutes: 10
 
       - name: Upload coverage to Codecov
@@ -183,7 +183,7 @@ jobs:
             VERSION=dev-${{ steps.extract.outputs.slug }}
 
       - name: Output image URI
-        id: image
+        id: image-output
         run: |
           echo "uri=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:dev-${{ github.sha }}" >> "$GITHUB_OUTPUT"
           echo "tag=dev-${{ github.sha }}" >> "$GITHUB_OUTPUT"

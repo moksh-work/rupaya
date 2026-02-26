@@ -8,18 +8,11 @@ on:
     branches:
       - main
       - feature/**
-    paths:
-      - 'android/**'
-      - 'shared/**'
-      - '!docs/**'
-      - '!**/*.md'
+      - bugfix/**
+      - chore/**
+      - release/**
   pull_request:
-    branches: [ main ]
-    paths:
-      - 'android/**'
-      - 'shared/**'
-      - '!docs/**'
-      - '!**/*.md'
+    branches: [ main, develop ]
   workflow_dispatch:
 
 concurrency:
