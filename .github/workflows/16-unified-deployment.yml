@@ -343,14 +343,26 @@ jobs:
             }
 
             import_if_missing aws_ecr_repository.rupaya_backend "rupaya-backend"
+            import_if_missing aws_ecr_lifecycle_policy.rupaya_backend "rupaya-backend"
             import_if_missing aws_cloudwatch_log_group.ecs_dev "/ecs/rupaya-backend-dev"
             import_if_missing aws_db_subnet_group.rupaya_dev "rupaya-dev"
             import_if_missing aws_elasticache_subnet_group.rupaya_dev "rupaya-dev"
             import_if_missing aws_ecs_cluster.rupaya_dev "rupaya-dev"
+            import_if_missing aws_ecs_cluster_capacity_providers.rupaya_dev "rupaya-dev"
             import_if_missing aws_db_instance.rupaya_postgres_dev "rupaya-postgres-dev"
             import_if_missing aws_elasticache_cluster.rupaya_redis_dev "rupaya-redis-dev"
             import_if_missing aws_iam_role.ecs_task_execution_role "rupaya-ecs-task-execution-role-dev"
             import_if_missing aws_iam_role.ecs_task_role "rupaya-ecs-task-role-dev"
+
+            LB_ARN=$(aws elbv2 describe-load-balancers --names rupaya-backend-dev-alb --query 'LoadBalancers[0].LoadBalancerArn' --output text 2>/dev/null || true)
+            TG_ARN=$(aws elbv2 describe-target-groups --names rupaya-backend-dev-tg --query 'TargetGroups[0].TargetGroupArn' --output text 2>/dev/null || true)
+            LISTENER_ARN=""
+            if [[ -n "$LB_ARN" && "$LB_ARN" != "None" && "$LB_ARN" != "null" ]]; then
+              LISTENER_ARN=$(aws elbv2 describe-listeners --load-balancer-arn "$LB_ARN" --query 'Listeners[?Port==`80`][0].ListenerArn' --output text 2>/dev/null || true)
+            fi
+            import_if_missing aws_lb.rupaya_backend_dev "$LB_ARN"
+            import_if_missing aws_lb_target_group.rupaya_backend_dev "$TG_ARN"
+            import_if_missing aws_lb_listener.rupaya_backend_dev "$LISTENER_ARN"
 
             if [[ -n "$VPC_ID" && "$VPC_ID" != "None" ]]; then
               SG_ECS=$(aws ec2 describe-security-groups --filters Name=vpc-id,Values="$VPC_ID" Name=group-name,Values=rupaya-backend-dev-sg --query 'SecurityGroups[0].GroupId' --output text 2>/dev/null || true)
@@ -360,6 +372,8 @@ jobs:
               import_if_missing aws_security_group.rds_dev "$SG_RDS"
               import_if_missing aws_security_group.redis_dev "$SG_REDIS"
             fi
+
+            terraform state list || true
           fi
 
           terraform validate
