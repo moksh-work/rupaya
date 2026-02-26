@@ -203,6 +203,25 @@ log_error() {
     echo -e "${RED}✗${NC} $1"
 }
 
+safe_remove() {
+    local file_path="$1"
+
+    if [ -z "$file_path" ] || [ ! -e "$file_path" ]; then
+        return 0
+    fi
+
+    /bin/rm -f "$file_path" 2>/dev/null && return 0
+
+    # On some macOS filesystems, rm may report EPERM even when file is removed.
+    if [ ! -e "$file_path" ]; then
+        log_warn "Cleanup warning ignored for $file_path (file already removed)"
+        return 0
+    fi
+
+    log_warn "Could not remove $file_path (continuing)"
+    return 0
+}
+
 # ============================================================================
 # Prerequisites Check
 # ============================================================================
@@ -465,7 +484,7 @@ destroy_terraform() {
             read -p "Type the environment name '$DEPLOY_ENVIRONMENTS' to confirm: " confirm_env
             if [[ "$confirm_env" != "$DEPLOY_ENVIRONMENTS" ]]; then
                 log_error "Environment name mismatch. Destroy cancelled."
-                rm -f tfplan.destroy
+                safe_remove tfplan.destroy
                 cd - > /dev/null
                 exit 1
             fi
@@ -474,7 +493,7 @@ destroy_terraform() {
         read -p "Type 'yes' to confirm destruction: " confirm
         if [[ "$confirm" != "yes" ]]; then
             log_warn "Terraform destroy cancelled"
-            rm -f tfplan.destroy
+            safe_remove tfplan.destroy
             cd - > /dev/null
             exit 1
         fi
@@ -486,7 +505,7 @@ destroy_terraform() {
     log_success "IAM role(s) destroyed successfully"
     
     # Clean up plan file
-    rm -f tfplan.destroy
+    safe_remove tfplan.destroy
     
     cd - > /dev/null
     echo ""
@@ -601,7 +620,7 @@ apply_terraform() {
     fi
     
     # Clean up plan file
-    rm -f tfplan.oidc
+    safe_remove tfplan.oidc
     
     cd - > /dev/null
     echo ""
