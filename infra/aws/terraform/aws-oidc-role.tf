@@ -173,6 +173,7 @@ data "aws_iam_policy_document" "ecr_policy" {
     sid    = "ECRPushImage"
     effect = "Allow"
     actions = [
+      "ecr:BatchCheckLayerAvailability",
       "ecr:PutImage",
       "ecr:InitiateLayerUpload",
       "ecr:UploadLayerPart",
