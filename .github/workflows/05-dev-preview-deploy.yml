@@ -240,7 +240,28 @@ jobs:
             --task-definition "${{ env.ECS_SERVICE }}" \
             --region ${{ env.AWS_REGION }} \
             --query 'taskDefinition' \
-            --output json)
+            --output json 2>/dev/null) || true
+
+          if [ -z "$TASK_DEF_JSON" ] || [ "$TASK_DEF_JSON" = "null" ]; then
+            echo "Direct task definition lookup failed for '${{ env.ECS_SERVICE }}', resolving from ECS service..."
+            SERVICE_TASK_DEF=$(aws ecs describe-services \
+              --cluster "${{ env.ECS_CLUSTER }}" \
+              --services "${{ env.ECS_SERVICE }}" \
+              --region "${{ env.AWS_REGION }}" \
+              --query 'services[0].taskDefinition' \
+              --output text)
+
+            if [ -z "$SERVICE_TASK_DEF" ] || [ "$SERVICE_TASK_DEF" = "None" ] || [ "$SERVICE_TASK_DEF" = "null" ]; then
+              echo "Could not resolve task definition from ECS service '${{ env.ECS_SERVICE }}' in cluster '${{ env.ECS_CLUSTER }}'"
+              exit 1
+            fi
+
+            TASK_DEF_JSON=$(aws ecs describe-task-definition \
+              --task-definition "$SERVICE_TASK_DEF" \
+              --region "${{ env.AWS_REGION }}" \
+              --query 'taskDefinition' \
+              --output json)
+          fi
           
           # Save to temp file for next step
           echo "$TASK_DEF_JSON" > /tmp/task-definition.json
