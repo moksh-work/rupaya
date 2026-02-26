@@ -1,4 +1,4 @@
-name: Test OIDC Authentication
+name: 00 - Test OIDC Authentication
 
 on:
   workflow_dispatch:

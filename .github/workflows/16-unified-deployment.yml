@@ -1,0 +1,275 @@
+name: 16 - Unified Multi-Environment Deployment
+
+on:
+  workflow_run:
+    workflows:
+      - "01 - Fast Feedback (Smoke Tests & Validation)"
+      - "02 - Mobile Build Check"
+      - "03 - Android Build & Release"
+      - "04 - iOS Build & Release"
+    types:
+      - completed
+
+  push:
+    branches:
+      - main
+      - release/**
+    tags:
+      - 'v*.*.*'
+    paths:
+      - 'backend/**'
+      - 'shared/**'
+      - 'infra/aws/**'
+      - '.github/workflows/16-unified-deployment.yml'
+
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+
+concurrency:
+  group: unified-deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+  pull-requests: write
+
+jobs:
+  determine-environment:
+    name: Determine Environment
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.set.outputs.environment }}
+      deploy: ${{ steps.set.outputs.deploy }}
+      image_tag: ${{ steps.set.outputs.image_tag }}
+      target_branch: ${{ steps.set.outputs.target_branch }}
+      target_sha: ${{ steps.set.outputs.target_sha }}
+    steps:
+      - id: set
+        run: |
+          ENV="none"
+          DEPLOY="false"
+          BRANCH=""
+          SHA="${{ github.sha }}"
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            ENV="${{ github.event.inputs.environment }}"
+            DEPLOY="true"
+            BRANCH="manual"
+            SHA="${{ github.sha }}"
+          elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            BRANCH="${{ github.event.workflow_run.head_branch }}"
+            SHA="${{ github.event.workflow_run.head_sha }}"
+            if [[ "$BRANCH" == feature/* || "$BRANCH" == bugfix/* || "$BRANCH" == chore/* ]]; then
+              ENV="dev"
+              DEPLOY="true"
+            fi
+          elif [[ "${{ github.ref }}" == refs/heads/release/* ]]; then
+            ENV="staging"
+            DEPLOY="true"
+            BRANCH="${{ github.ref_name }}"
+          elif [[ "${{ github.ref }}" == "refs/heads/main" || "${{ github.ref }}" == refs/tags/v* ]]; then
+            ENV="prod"
+            DEPLOY="true"
+            BRANCH="${{ github.ref_name }}"
+          fi
+
+          echo "environment=$ENV" >> $GITHUB_OUTPUT
+          echo "deploy=$DEPLOY" >> $GITHUB_OUTPUT
+          echo "image_tag=$SHA" >> $GITHUB_OUTPUT
+          echo "target_branch=$BRANCH" >> $GITHUB_OUTPUT
+          echo "target_sha=$SHA" >> $GITHUB_OUTPUT
+
+  prerequisite-check:
+    name: Verify 01/02/03/04 Success
+    runs-on: ubuntu-latest
+    needs: determine-environment
+    if: needs.determine-environment.outputs.deploy == 'true'
+    outputs:
+      ready: ${{ steps.check.outputs.ready }}
+    steps:
+      - id: check
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const isWorkflowRun = context.eventName === 'workflow_run';
+            if (!isWorkflowRun) {
+              core.setOutput('ready', 'true');
+              return;
+            }
+
+            const required = [
+              '01 - Fast Feedback (Smoke Tests & Validation)',
+              '02 - Mobile Build Check',
+              '03 - Android Build & Release',
+              '04 - iOS Build & Release'
+            ];
+
+            const sha = context.payload.workflow_run.head_sha;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
+              owner,
+              repo,
+              head_sha: sha,
+              per_page: 100
+            });
+
+            const latestByName = {};
+            for (const run of runs) {
+              if (!required.includes(run.name)) continue;
+              if (!latestByName[run.name] || new Date(run.created_at) > new Date(latestByName[run.name].created_at)) {
+                latestByName[run.name] = run;
+              }
+            }
+
+            const missing = [];
+            const failed = [];
+            for (const name of required) {
+              const run = latestByName[name];
+              if (!run) {
+                missing.push(name);
+              } else if (run.conclusion !== 'success') {
+                failed.push(`${name} (${run.conclusion || 'no conclusion'})`);
+              }
+            }
+
+            const ready = missing.length === 0 && failed.length === 0;
+            core.setOutput('ready', ready ? 'true' : 'false');
+
+            if (!ready) {
+              core.warning(`Prerequisites not ready. Missing: ${missing.join(', ') || 'none'}; Failed: ${failed.join(', ') || 'none'}`);
+            }
+
+  validate:
+    name: Validate Backend
+    runs-on: ubuntu-latest
+    needs: [determine-environment, prerequisite-check]
+    if: needs.determine-environment.outputs.deploy == 'true' && needs.prerequisite-check.outputs.ready == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install dependencies
+        run: |
+          cd backend
+          npm ci
+      - name: Lint
+        run: |
+          cd backend
+          npm run lint --if-present
+      - name: Unit tests (stable subset)
+        run: |
+          cd backend
+          npm test -- --testPathIgnorePatterns='e2e|integration/feature-flags.test.js'
+
+  build-and-push:
+    name: Build and Push Image
+    runs-on: ubuntu-latest
+    needs: [determine-environment, prerequisite-check, validate]
+    if: needs.determine-environment.outputs.deploy == 'true' && needs.prerequisite-check.outputs.ready == 'true'
+    outputs:
+      image_uri: ${{ steps.image.outputs.image_uri }}
+    env:
+      ENVIRONMENT: ${{ needs.determine-environment.outputs.environment }}
+      IMAGE_TAG: ${{ needs.determine-environment.outputs.image_tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve role ARN
+        id: role
+        run: |
+          case "$ENVIRONMENT" in
+            dev) echo "role_arn=${{ secrets.AWS_OIDC_ROLE_ARN_DEV }}" >> $GITHUB_OUTPUT ;;
+            staging) echo "role_arn=${{ secrets.AWS_OIDC_ROLE_ARN_STAGING }}" >> $GITHUB_OUTPUT ;;
+            prod) echo "role_arn=${{ secrets.AWS_OIDC_ROLE_ARN_PROD }}" >> $GITHUB_OUTPUT ;;
+            *) exit 1 ;;
+          esac
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ steps.role.outputs.role_arn }}
+          aws-region: us-east-1
+
+      - name: Login ECR
+        id: ecr
+        run: |
+          REGISTRY=$(aws sts get-caller-identity --query Account --output text).dkr.ecr.us-east-1.amazonaws.com
+          echo "registry=$REGISTRY" >> $GITHUB_OUTPUT
+          aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin "$REGISTRY"
+
+      - name: Build & push
+        run: |
+          IMAGE="${{ steps.ecr.outputs.registry }}/rupaya-backend:${IMAGE_TAG}"
+          docker build -t "$IMAGE" ./backend
+          docker push "$IMAGE"
+          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
+
+      - name: Export image uri
+        id: image
+        run: echo "image_uri=$IMAGE" >> $GITHUB_OUTPUT
+
+  terraform-apply:
+    name: Terraform Apply
+    runs-on: ubuntu-latest
+    needs: [determine-environment, prerequisite-check, build-and-push]
+    if: needs.determine-environment.outputs.deploy == 'true' && needs.prerequisite-check.outputs.ready == 'true'
+    env:
+      ENVIRONMENT: ${{ needs.determine-environment.outputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve role ARN
+        id: role
+        run: |
+          case "$ENVIRONMENT" in
+            dev) echo "role_arn=${{ secrets.AWS_OIDC_ROLE_ARN_DEV }}" >> $GITHUB_OUTPUT ;;
+            staging) echo "role_arn=${{ secrets.AWS_OIDC_ROLE_ARN_STAGING }}" >> $GITHUB_OUTPUT ;;
+            prod) echo "role_arn=${{ secrets.AWS_OIDC_ROLE_ARN_PROD }}" >> $GITHUB_OUTPUT ;;
+            *) exit 1 ;;
+          esac
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ steps.role.outputs.role_arn }}
+          aws-region: us-east-1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.6.6
+
+      - name: Terraform init/validate/apply
+        run: |
+          cd "infra/aws/environments/$ENVIRONMENT"
+          terraform init -upgrade
+          terraform validate
+          terraform apply -auto-approve
+
+  deploy-summary:
+    name: Deployment Summary
+    runs-on: ubuntu-latest
+    needs: [determine-environment, prerequisite-check, terraform-apply]
+    if: always()
+    steps:
+      - name: Print summary
+        run: |
+          echo "Environment: ${{ needs.determine-environment.outputs.environment }}"
+          echo "Deploy requested: ${{ needs.determine-environment.outputs.deploy }}"
+          echo "Prerequisite ready: ${{ needs.prerequisite-check.outputs.ready }}"
+          echo "Terraform result: ${{ needs.terraform-apply.result }}"
