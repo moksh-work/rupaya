@@ -44,7 +44,7 @@ env:
   AWS_ROLE_ARN: arn:aws:iam::992382556348:role/rupaya-github-oidc-dev
   AWS_ACCOUNT_ID: '992382556348'
   ECR_REPOSITORY: rupaya-backend
-  ECS_CLUSTER: rupaya-dev
+  ECS_CLUSTER: rupaya-dev-cluster
   ECS_SERVICE: rupaya-backend-dev
   ECS_CONTAINER_NAME: rupaya-backend
 
