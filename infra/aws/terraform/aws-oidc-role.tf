@@ -297,6 +297,7 @@ data "aws_iam_policy_document" "terraform_infra_policy" {
       "logs:*",
       "autoscaling:*",
       "elasticloadbalancing:*",
+      "iam:*",
       "iam:CreateRole",
       "iam:DeleteRole",
       "iam:AttachRolePolicy",

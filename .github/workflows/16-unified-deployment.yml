@@ -321,7 +321,47 @@ jobs:
       - name: Terraform init/validate/apply
         run: |
           cd "infra/aws/environments/$ENVIRONMENT"
-          terraform init -upgrade
+
+          terraform init -upgrade \
+            -backend-config="bucket=rupaya-terraform-state" \
+            -backend-config="key=environments/$ENVIRONMENT/terraform.tfstate" \
+            -backend-config="region=us-east-1" \
+            -backend-config="dynamodb_table=rupaya-terraform-lock" \
+            -backend-config="encrypt=true"
+
+          if [[ "$ENVIRONMENT" == "dev" ]]; then
+            VPC_ID=$(aws ec2 describe-vpcs --filters Name=isDefault,Values=true --query 'Vpcs[0].VpcId' --output text 2>/dev/null || true)
+
+            import_if_missing() {
+              local address="$1"
+              local import_id="$2"
+              if ! terraform state show "$address" >/dev/null 2>&1; then
+                if [[ -n "$import_id" && "$import_id" != "None" && "$import_id" != "null" ]]; then
+                  terraform import "$address" "$import_id" || true
+                fi
+              fi
+            }
+
+            import_if_missing aws_ecr_repository.rupaya_backend "rupaya-backend"
+            import_if_missing aws_cloudwatch_log_group.ecs_dev "/ecs/rupaya-backend-dev"
+            import_if_missing aws_db_subnet_group.rupaya_dev "rupaya-dev"
+            import_if_missing aws_elasticache_subnet_group.rupaya_dev "rupaya-dev"
+            import_if_missing aws_ecs_cluster.rupaya_dev "rupaya-dev"
+            import_if_missing aws_db_instance.rupaya_postgres_dev "rupaya-postgres-dev"
+            import_if_missing aws_elasticache_cluster.rupaya_redis_dev "rupaya-redis-dev"
+            import_if_missing aws_iam_role.ecs_task_execution_role "rupaya-ecs-task-execution-role-dev"
+            import_if_missing aws_iam_role.ecs_task_role "rupaya-ecs-task-role-dev"
+
+            if [[ -n "$VPC_ID" && "$VPC_ID" != "None" ]]; then
+              SG_ECS=$(aws ec2 describe-security-groups --filters Name=vpc-id,Values="$VPC_ID" Name=group-name,Values=rupaya-backend-dev-sg --query 'SecurityGroups[0].GroupId' --output text 2>/dev/null || true)
+              SG_RDS=$(aws ec2 describe-security-groups --filters Name=vpc-id,Values="$VPC_ID" Name=group-name,Values=rupaya-postgres-dev-sg --query 'SecurityGroups[0].GroupId' --output text 2>/dev/null || true)
+              SG_REDIS=$(aws ec2 describe-security-groups --filters Name=vpc-id,Values="$VPC_ID" Name=group-name,Values=rupaya-redis-dev-sg --query 'SecurityGroups[0].GroupId' --output text 2>/dev/null || true)
+              import_if_missing aws_security_group.ecs_dev "$SG_ECS"
+              import_if_missing aws_security_group.rds_dev "$SG_RDS"
+              import_if_missing aws_security_group.redis_dev "$SG_REDIS"
+            fi
+          fi
+
           terraform validate
           terraform apply -auto-approve -var="container_image=${{ needs.build-and-push.outputs.image_uri }}"
 
