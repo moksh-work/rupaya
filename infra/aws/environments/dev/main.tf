@@ -5,6 +5,10 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.0"
+    }
   }
   # Uncomment when ready to use remote state
   # backend "s3" {
@@ -27,6 +31,15 @@ provider "aws" {
       CreatedAt   = timestamp()
     }
   }
+}
+
+resource "random_password" "db_master_password" {
+  length  = 24
+  special = false
+}
+
+locals {
+  effective_db_master_password = var.db_master_password != "" ? var.db_master_password : random_password.db_master_password.result
 }
 
 # ========== DATA SOURCES ==========
@@ -154,7 +167,7 @@ resource "aws_db_instance" "rupaya_postgres_dev" {
 
   db_name  = var.db_name
   username = var.db_master_username
-  password = var.db_master_password
+  password = local.effective_db_master_password
 
   vpc_security_group_ids = [aws_security_group.rds_dev.id]
   db_subnet_group_name   = aws_db_subnet_group.rupaya_dev.name

@@ -213,7 +213,7 @@ jobs:
     name: Deploy to Dev ECS
     needs: [validate, build]
     runs-on: ubuntu-latest
-    if: success()
+    if: success() && github.event_name != 'push'
     timeout-minutes: 15
 
     permissions:

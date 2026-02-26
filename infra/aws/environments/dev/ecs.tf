@@ -27,7 +27,7 @@ resource "aws_ecs_task_definition" "rupaya_backend_dev" {
         },
         {
           name  = "DATABASE_URL"
-          value = "postgres://${var.db_master_username}:${var.db_master_password}@${aws_db_instance.rupaya_postgres_dev.endpoint}/${var.db_name}?sslmode=require"
+          value = "postgres://${var.db_master_username}:${local.effective_db_master_password}@${aws_db_instance.rupaya_postgres_dev.endpoint}/${var.db_name}?sslmode=require"
         },
         {
           name  = "REDIS_URL"
