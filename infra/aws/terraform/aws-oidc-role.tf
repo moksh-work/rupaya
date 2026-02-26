@@ -112,7 +112,7 @@ data "aws_iam_policy_document" "github_assume_role" {
   statement {
     sid     = "AllowGitHubOIDCRupaya${title(each.key)}"
     effect  = "Allow"
-    actions = ["sts:AssumeRole"]
+    actions = ["sts:AssumeRoleWithWebIdentity"]
 
     principals {
       type        = "Federated"
