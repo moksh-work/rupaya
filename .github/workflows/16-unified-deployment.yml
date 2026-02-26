@@ -232,12 +232,23 @@ jobs:
       - name: Resolve role ARN
         id: role
         run: |
+          ROLE_ARN=""
           case "$ENVIRONMENT" in
-            dev) echo "role_arn=${{ secrets.AWS_OIDC_ROLE_ARN_DEV }}" >> $GITHUB_OUTPUT ;;
-            staging) echo "role_arn=${{ secrets.AWS_OIDC_ROLE_ARN_STAGING }}" >> $GITHUB_OUTPUT ;;
-            prod) echo "role_arn=${{ secrets.AWS_OIDC_ROLE_ARN_PROD }}" >> $GITHUB_OUTPUT ;;
+            dev)
+              ROLE_ARN="${{ secrets.AWS_OIDC_ROLE_ARN_DEV }}"
+              if [[ -z "$ROLE_ARN" || "$ROLE_ARN" != arn:aws:iam::*:role/* ]]; then
+                ROLE_ARN="arn:aws:iam::992382556348:role/rupaya-github-oidc-dev"
+              fi
+              ;;
+            staging)
+              ROLE_ARN="${{ secrets.AWS_OIDC_ROLE_ARN_STAGING }}"
+              ;;
+            prod)
+              ROLE_ARN="${{ secrets.AWS_OIDC_ROLE_ARN_PROD }}"
+              ;;
             *) exit 1 ;;
           esac
+          echo "role_arn=$ROLE_ARN" >> $GITHUB_OUTPUT
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -278,12 +289,23 @@ jobs:
       - name: Resolve role ARN
         id: role
         run: |
+          ROLE_ARN=""
           case "$ENVIRONMENT" in
-            dev) echo "role_arn=${{ secrets.AWS_OIDC_ROLE_ARN_DEV }}" >> $GITHUB_OUTPUT ;;
-            staging) echo "role_arn=${{ secrets.AWS_OIDC_ROLE_ARN_STAGING }}" >> $GITHUB_OUTPUT ;;
-            prod) echo "role_arn=${{ secrets.AWS_OIDC_ROLE_ARN_PROD }}" >> $GITHUB_OUTPUT ;;
+            dev)
+              ROLE_ARN="${{ secrets.AWS_OIDC_ROLE_ARN_DEV }}"
+              if [[ -z "$ROLE_ARN" || "$ROLE_ARN" != arn:aws:iam::*:role/* ]]; then
+                ROLE_ARN="arn:aws:iam::992382556348:role/rupaya-github-oidc-dev"
+              fi
+              ;;
+            staging)
+              ROLE_ARN="${{ secrets.AWS_OIDC_ROLE_ARN_STAGING }}"
+              ;;
+            prod)
+              ROLE_ARN="${{ secrets.AWS_OIDC_ROLE_ARN_PROD }}"
+              ;;
             *) exit 1 ;;
           esac
+          echo "role_arn=$ROLE_ARN" >> $GITHUB_OUTPUT
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
