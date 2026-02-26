@@ -28,7 +28,6 @@ provider "aws" {
       Environment = "development"
       ManagedBy   = "terraform"
       Project     = "rupaya"
-      CreatedAt   = timestamp()
     }
   }
 }
