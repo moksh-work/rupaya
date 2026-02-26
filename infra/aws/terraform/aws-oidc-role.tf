@@ -198,6 +198,17 @@ data "aws_iam_policy_document" "ecs_policy" {
   for_each = var.environments
 
   statement {
+    sid    = "ECSReadAccess"
+    effect = "Allow"
+    actions = [
+      "ecs:DescribeTaskDefinition",
+      "ecs:DescribeServices",
+      "ecs:ListTaskDefinitions"
+    ]
+    resources = ["*"]
+  }
+
+  statement {
     sid    = "ECSUpdateService"
     effect = "Allow"
     actions = [
