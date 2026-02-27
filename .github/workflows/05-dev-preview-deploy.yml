@@ -447,13 +447,23 @@ jobs:
           NODE_ENV: test
           RUN_REMOTE_TESTS: 'true'
           RUN_E2E_TESTS: 'true'
-          API_BASE_URL: ${{ needs.deploy.outputs.api-url || 'http://localhost:3000' }}
+          API_BASE_URL: ${{ needs.deploy.outputs['api-url'] }}
           DATABASE_URL: postgres://test_user:test_password@localhost:5432/rupaya_test
           REDIS_URL: redis://localhost:6379
           JWT_SECRET: test-secret-key-minimum-32-characters-long
           REFRESH_TOKEN_SECRET: test-refresh-secret-key-minimum-32-chars
           ENCRYPTION_KEY: test-encryption-key-minimum-32-chars
-        run: npm test -- __tests__/e2e --coverage --maxWorkers=1 --json --outputFile=/tmp/e2e-results.json
+        run: |
+          if [ -z "$API_BASE_URL" ]; then
+            echo "Missing API_BASE_URL from deploy job output"
+            exit 1
+          fi
+
+          npm test -- \
+            __tests__/e2e/remote-api.test.js \
+            __tests__/e2e/deployment-features.test.js \
+            __tests__/e2e/all-endpoints-smoke.test.js \
+            --coverage --maxWorkers=1 --json --outputFile=/tmp/e2e-results.json
         timeout-minutes: 15
 
       - name: Run integration tests
