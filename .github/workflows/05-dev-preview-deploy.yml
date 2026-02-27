@@ -137,6 +137,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Resolve AWS role ARN
+        id: role
+        run: |
+          ROLE_ARN="${{ secrets.AWS_OIDC_ROLE_ARN_DEV }}"
+          ROLE_ARN="$(echo "$ROLE_ARN" | tr -d '\r' | xargs)"
+          if [[ -z "$ROLE_ARN" || "$ROLE_ARN" != arn:aws:iam::*:role/* ]]; then
+            ROLE_ARN="arn:aws:iam::368613568221:role/rupaya-github-oidc-dev"
+          fi
+          echo "role_arn=$ROLE_ARN" >> "$GITHUB_OUTPUT"
+
       - name: Extract branch name
         id: extract
         shell: bash
@@ -149,7 +159,7 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          role-to-assume: ${{ steps.role.outputs.role_arn }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Ensure ECR repository exists
@@ -220,10 +230,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Resolve AWS role ARN
+        id: role
+        run: |
+          ROLE_ARN="${{ secrets.AWS_OIDC_ROLE_ARN_DEV }}"
+          ROLE_ARN="$(echo "$ROLE_ARN" | tr -d '\r' | xargs)"
+          if [[ -z "$ROLE_ARN" || "$ROLE_ARN" != arn:aws:iam::*:role/* ]]; then
+            ROLE_ARN="arn:aws:iam::368613568221:role/rupaya-github-oidc-dev"
+          fi
+          echo "role_arn=$ROLE_ARN" >> "$GITHUB_OUTPUT"
+
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          role-to-assume: ${{ steps.role.outputs.role_arn }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Download task definition

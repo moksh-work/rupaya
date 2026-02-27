@@ -231,6 +231,10 @@ jobs:
           case "$ENVIRONMENT" in
             dev)
               ROLE_ARN="${{ secrets.AWS_OIDC_ROLE_ARN_DEV }}"
+              ROLE_ARN="$(echo "$ROLE_ARN" | tr -d '\r' | xargs)"
+              if [[ -z "$ROLE_ARN" || "$ROLE_ARN" != arn:aws:iam::*:role/* ]]; then
+                ROLE_ARN="arn:aws:iam::368613568221:role/rupaya-github-oidc-dev"
+              fi
               ;;
             staging)
               ROLE_ARN="${{ secrets.AWS_OIDC_ROLE_ARN_STAGING }}"
@@ -289,6 +293,10 @@ jobs:
           case "$ENVIRONMENT" in
             dev)
               ROLE_ARN="${{ secrets.AWS_OIDC_ROLE_ARN_DEV }}"
+              ROLE_ARN="$(echo "$ROLE_ARN" | tr -d '\r' | xargs)"
+              if [[ -z "$ROLE_ARN" || "$ROLE_ARN" != arn:aws:iam::*:role/* ]]; then
+                ROLE_ARN="arn:aws:iam::368613568221:role/rupaya-github-oidc-dev"
+              fi
               ;;
             staging)
               ROLE_ARN="${{ secrets.AWS_OIDC_ROLE_ARN_STAGING }}"
