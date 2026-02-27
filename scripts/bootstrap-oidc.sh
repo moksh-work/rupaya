@@ -834,14 +834,22 @@ test_oidc_auth() {
     echo ""
     
     # Trigger workflow run
-    gh workflow run 00-test-oidc.yml \
-        --repo "$GITHUB_ORG/$GITHUB_REPO" || true
+    local dispatch_output
+    if dispatch_output=$(gh workflow run 00-test-oidc.yml --repo "$GITHUB_ORG/$GITHUB_REPO" 2>&1); then
+        echo "$dispatch_output"
+        echo ""
+        log_info "Workflow triggered. View results:"
+        echo "  https://github.com/$GITHUB_ORG/$GITHUB_REPO/actions/workflows/00-test-oidc.yml"
+        echo ""
+        log_warn "Note: Workflow runs async. Check logs after 1-2 minutes."
+    else
+        log_warn "Could not dispatch 00-test-oidc.yml automatically."
+        echo "  Reason: $dispatch_output"
+        echo ""
+        echo "  You can still run it manually from:"
+        echo "  https://github.com/$GITHUB_ORG/$GITHUB_REPO/actions/workflows/00-test-oidc.yml"
+    fi
     
-    echo ""
-    log_info "Workflow triggered. View results:"
-    echo "  https://github.com/$GITHUB_ORG/$GITHUB_REPO/actions/workflows/00-test-oidc.yml"
-    echo ""
-    log_warn "Note: Workflow runs async. Check logs after 1-2 minutes."
     echo ""
 }
 
