@@ -130,9 +130,9 @@ jobs:
       id-token: write
 
     outputs:
-      image-uri: ${{ steps.image-output.outputs.uri }}
-      image-tag: ${{ steps.image-output.outputs.tag }}
-      branch-name: ${{ steps.extract.outputs.branch }}
+      image_uri: ${{ steps.image-output.outputs.uri }}
+      image_tag: ${{ steps.image-output.outputs.tag }}
+      branch_name: ${{ steps.extract.outputs.branch }}
 
     steps:
       - uses: actions/checkout@v4
@@ -286,7 +286,7 @@ jobs:
         with:
           task-definition: /tmp/task-definition.json
           container-name: ${{ env.ECS_CONTAINER_NAME }}
-          image: ${{ needs.build.outputs.image-uri }}
+          image: ${{ needs.build.outputs.image_uri }}
 
       - name: Deploy to ECS
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
