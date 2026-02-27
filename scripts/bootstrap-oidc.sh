@@ -222,6 +222,16 @@ safe_remove() {
     return 0
 }
 
+normalize_role_arn() {
+    local role_arn="$1"
+    echo "$role_arn" | tr -d '\r' | xargs
+}
+
+is_valid_role_arn() {
+    local role_arn="$1"
+    [[ "$role_arn" =~ ^arn:aws:iam::[0-9]{12}:role/.+ ]]
+}
+
 # ============================================================================
 # Prerequisites Check
 # ============================================================================
@@ -647,16 +657,31 @@ apply_terraform() {
     # Get role ARNs from output based on selected environment
     if [ "$DEPLOY_ENVIRONMENTS" = "all" ] || [ "$DEPLOY_ENVIRONMENTS" = "development" ]; then
         OIDC_ROLE_ARN_DEV=$(terraform output -raw github_oidc_role_arn_development 2>/dev/null)
+        OIDC_ROLE_ARN_DEV=$(normalize_role_arn "$OIDC_ROLE_ARN_DEV")
+        if ! is_valid_role_arn "$OIDC_ROLE_ARN_DEV"; then
+            log_error "Invalid development role ARN from Terraform output: $OIDC_ROLE_ARN_DEV"
+            exit 1
+        fi
         log_success "Development OIDC Role ARN: $OIDC_ROLE_ARN_DEV"
     fi
     
     if [ "$DEPLOY_ENVIRONMENTS" = "all" ] || [ "$DEPLOY_ENVIRONMENTS" = "staging" ]; then
         OIDC_ROLE_ARN_STAGING=$(terraform output -raw github_oidc_role_arn_staging 2>/dev/null)
+        OIDC_ROLE_ARN_STAGING=$(normalize_role_arn "$OIDC_ROLE_ARN_STAGING")
+        if ! is_valid_role_arn "$OIDC_ROLE_ARN_STAGING"; then
+            log_error "Invalid staging role ARN from Terraform output: $OIDC_ROLE_ARN_STAGING"
+            exit 1
+        fi
         log_success "Staging OIDC Role ARN: $OIDC_ROLE_ARN_STAGING"
     fi
     
     if [ "$DEPLOY_ENVIRONMENTS" = "all" ] || [ "$DEPLOY_ENVIRONMENTS" = "production" ]; then
         OIDC_ROLE_ARN_PROD=$(terraform output -raw github_oidc_role_arn_production 2>/dev/null)
+        OIDC_ROLE_ARN_PROD=$(normalize_role_arn "$OIDC_ROLE_ARN_PROD")
+        if ! is_valid_role_arn "$OIDC_ROLE_ARN_PROD"; then
+            log_error "Invalid production role ARN from Terraform output: $OIDC_ROLE_ARN_PROD"
+            exit 1
+        fi
         log_success "Production OIDC Role ARN: $OIDC_ROLE_ARN_PROD"
     fi
     
@@ -680,6 +705,10 @@ create_github_secret() {
         if gh secret list --repo "$GITHUB_ORG/$GITHUB_REPO" 2>/dev/null | grep -q AWS_OIDC_ROLE_ARN_DEV; then
             log_warn "Secret AWS_OIDC_ROLE_ARN_DEV already exists, updating..."
         fi
+        if ! is_valid_role_arn "$OIDC_ROLE_ARN_DEV"; then
+            log_error "Refusing to store invalid AWS_OIDC_ROLE_ARN_DEV value: $OIDC_ROLE_ARN_DEV"
+            exit 1
+        fi
         echo "$OIDC_ROLE_ARN_DEV" | gh secret set AWS_OIDC_ROLE_ARN_DEV \
             --repo "$GITHUB_ORG/$GITHUB_REPO" \
             --body -
@@ -692,6 +721,10 @@ create_github_secret() {
         if gh secret list --repo "$GITHUB_ORG/$GITHUB_REPO" 2>/dev/null | grep -q AWS_OIDC_ROLE_ARN_STAGING; then
             log_warn "Secret AWS_OIDC_ROLE_ARN_STAGING already exists, updating..."
         fi
+        if ! is_valid_role_arn "$OIDC_ROLE_ARN_STAGING"; then
+            log_error "Refusing to store invalid AWS_OIDC_ROLE_ARN_STAGING value: $OIDC_ROLE_ARN_STAGING"
+            exit 1
+        fi
         echo "$OIDC_ROLE_ARN_STAGING" | gh secret set AWS_OIDC_ROLE_ARN_STAGING \
             --repo "$GITHUB_ORG/$GITHUB_REPO" \
             --body -
@@ -703,6 +736,10 @@ create_github_secret() {
         log_info "Creating AWS_OIDC_ROLE_ARN_PROD..."
         if gh secret list --repo "$GITHUB_ORG/$GITHUB_REPO" 2>/dev/null | grep -q AWS_OIDC_ROLE_ARN_PROD; then
             log_warn "Secret AWS_OIDC_ROLE_ARN_PROD already exists, updating..."
+        fi
+        if ! is_valid_role_arn "$OIDC_ROLE_ARN_PROD"; then
+            log_error "Refusing to store invalid AWS_OIDC_ROLE_ARN_PROD value: $OIDC_ROLE_ARN_PROD"
+            exit 1
         fi
         echo "$OIDC_ROLE_ARN_PROD" | gh secret set AWS_OIDC_ROLE_ARN_PROD \
             --repo "$GITHUB_ORG/$GITHUB_REPO" \

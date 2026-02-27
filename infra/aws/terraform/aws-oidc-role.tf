@@ -299,6 +299,7 @@ data "aws_iam_policy_document" "terraform_infra_policy" {
       "cloudformation:*",
       "logs:*",
       "autoscaling:*",
+      "application-autoscaling:*",
       "elasticloadbalancing:*",
       "iam:*",
       "iam:CreateRole",

@@ -241,11 +241,12 @@ resource "aws_ecr_lifecycle_policy" "rupaya_backend" {
     rules = [
       {
         rulePriority = 1
-        description  = "Keep last 20 images"
+        description  = "Keep dev-tagged images"
         selection = {
-          tagStatus     = "any"
+          tagStatus     = "tagged"
+          tagPrefixList = ["dev-"]
           countType     = "imageCountMoreThan"
-          countNumber   = 20
+          countNumber   = 10
         }
         action = {
           type = "expire"
@@ -253,12 +254,11 @@ resource "aws_ecr_lifecycle_policy" "rupaya_backend" {
       },
       {
         rulePriority = 2
-        description  = "Keep dev-tagged images"
+        description  = "Keep last 20 images"
         selection = {
-          tagStatus     = "tagged"
-          tagPrefixList = ["dev-"]
+          tagStatus     = "any"
           countType     = "imageCountMoreThan"
-          countNumber   = 10
+          countNumber   = 20
         }
         action = {
           type = "expire"
