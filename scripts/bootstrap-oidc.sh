@@ -365,8 +365,25 @@ select_environment() {
     echo "  3) Production only"
     echo "  4) All environments (dev, staging, prod)"
     echo ""
-    read -p "Enter choice [1-4]: " env_choice
-    
+    read -r -p "Enter choice [1-4]: " env_choice
+    env_choice="$(echo "$env_choice" | xargs)"
+
+    # Accept formats like "1", "1) Development only", or "development"
+    case "$env_choice" in
+        1*|development|Development)
+            env_choice="1"
+            ;;
+        2*|staging|Staging)
+            env_choice="2"
+            ;;
+        3*|production|Production|prod|Prod)
+            env_choice="3"
+            ;;
+        4*|all|All)
+            env_choice="4"
+            ;;
+    esac
+
     case $env_choice in
         1)
             DEPLOY_ENVIRONMENTS="development"
@@ -412,6 +429,28 @@ get_aws_account_id() {
     fi
 }
 
+reconcile_terraform_state_account() {
+    local current_account="$1"
+
+    if [ -z "$current_account" ] || [ ! -f "terraform.tfstate" ]; then
+        return 0
+    fi
+
+    local state_account
+    state_account=$(grep -Eo 'arn:aws:iam::[0-9]{12}:' terraform.tfstate 2>/dev/null | head -n1 | sed -E 's/arn:aws:iam::([0-9]{12}):/\1/')
+
+    if [ -n "$state_account" ] && [ "$state_account" != "$current_account" ]; then
+        log_warn "Detected Terraform state from different AWS account: $state_account"
+        log_warn "Current AWS account is: $current_account"
+        log_info "Resetting local Terraform state for the current account..."
+
+        safe_remove terraform.tfstate
+        safe_remove terraform.tfstate.backup
+
+        log_success "Local Terraform state reset complete"
+    fi
+}
+
 # ============================================================================
 # Terraform Destroy
 # ============================================================================
@@ -429,6 +468,7 @@ destroy_terraform() {
     
     log_info "Running terraform init..."
     terraform init
+    reconcile_terraform_state_account "$ACCOUNT_ID"
     
     # Build terraform targets based on selected environment
     local targets="-target=aws_iam_openid_connect_provider.github"
@@ -570,6 +610,7 @@ apply_terraform() {
     
     log_info "Running terraform init..."
     terraform init
+    reconcile_terraform_state_account "$ACCOUNT_ID"
     
     # Build terraform targets based on selected environment
     local targets="-target=aws_iam_openid_connect_provider.github"
