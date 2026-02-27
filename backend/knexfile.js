@@ -3,10 +3,23 @@ require('dotenv').config();
 
 const dbSslEnabled = process.env.DB_SSL === 'true' || process.env.NODE_ENV === 'production';
 
+function sanitizeDatabaseUrl(databaseUrl) {
+  try {
+    const parsedUrl = new URL(databaseUrl);
+    parsedUrl.searchParams.delete('sslmode');
+    parsedUrl.searchParams.delete('sslrootcert');
+    parsedUrl.searchParams.delete('sslcert');
+    parsedUrl.searchParams.delete('sslkey');
+    return parsedUrl.toString();
+  } catch (error) {
+    return databaseUrl;
+  }
+}
+
 function buildConnection(defaultHost) {
   if (process.env.DATABASE_URL) {
     return {
-      connectionString: process.env.DATABASE_URL,
+      connectionString: sanitizeDatabaseUrl(process.env.DATABASE_URL),
       ssl: dbSslEnabled ? { rejectUnauthorized: false } : false
     };
   }
