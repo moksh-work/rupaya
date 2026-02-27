@@ -765,7 +765,7 @@ create_github_environments() {
     if [ "$DEPLOY_ENVIRONMENTS" = "all" ] || [ "$DEPLOY_ENVIRONMENTS" = "development" ]; then
         log_info "Creating development environment..."
         create_environment "development" \
-            "DEV_ECS_CLUSTER=rupaya-dev-cluster" \
+            "DEV_ECS_CLUSTER=rupaya-dev" \
             "DEV_ECS_SERVICE=rupaya-backend-dev" \
             "DEV_ECS_TASK_FAMILY=rupaya-backend-dev" \
             "DEV_API_BASE_URL=https://api-dev.rupaya.io" \

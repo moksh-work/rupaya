@@ -37,7 +37,7 @@ env:
   AWS_REGION: us-east-1
   AWS_ROLE_ARN: ${{ secrets.AWS_OIDC_ROLE_ARN_DEV }}
   ECR_REPOSITORY: rupaya-backend
-  ECS_CLUSTER: rupaya-dev-cluster
+  ECS_CLUSTER: rupaya-dev
   ECS_SERVICE: rupaya-backend-dev
   ECS_CONTAINER_NAME: rupaya-backend
 
