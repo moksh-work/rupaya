@@ -92,6 +92,31 @@ jobs:
         working-directory: backend
         run: npm ci --prefer-offline
 
+      - name: Resolve AWS role ARN
+        id: role
+        run: |
+          ROLE_ARN="${{ secrets.AWS_OIDC_ROLE_ARN_DEV }}"
+          ROLE_ARN="$(echo "$ROLE_ARN" | tr -d '\r' | xargs)"
+          if [[ -z "$ROLE_ARN" || "$ROLE_ARN" != arn:aws:iam::*:role/* ]]; then
+            ROLE_ARN="arn:aws:iam::368613568221:role/rupaya-github-oidc-dev"
+          fi
+          echo "role_arn=$ROLE_ARN" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ steps.role.outputs.role_arn }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolve API base URL
+        run: |
+          LB_DNS=$(aws elbv2 describe-load-balancers \
+            --names rupaya-backend-dev-alb \
+            --region ${{ env.AWS_REGION }} \
+            --query 'LoadBalancers[0].DNSName' \
+            --output text)
+          echo "API_BASE_URL=http://$LB_DNS" >> "$GITHUB_ENV"
+
       - name: Run linter
         working-directory: backend
         run: npm run lint || true
@@ -447,7 +472,6 @@ jobs:
           NODE_ENV: test
           RUN_REMOTE_TESTS: 'true'
           RUN_E2E_TESTS: 'true'
-          API_BASE_URL: ${{ needs.deploy.outputs.api_url }}
           DATABASE_URL: postgres://test_user:test_password@localhost:5432/rupaya_test
           REDIS_URL: redis://localhost:6379
           JWT_SECRET: test-secret-key-minimum-32-characters-long
@@ -589,7 +613,7 @@ jobs:
       - name: Generate test report
         if: always()
         run: |
-          cat > /tmp/test-summary.txt << 'EOF'
+          cat > /tmp/test-summary.txt << EOF
           # Dev Preview Test Results
           
           - Validation: ✅ PASSED
@@ -598,7 +622,7 @@ jobs:
           - E2E Tests: ⏳ IN_PROGRESS
           
           **Environment Details:**
-          - API URL: ${{ needs.deploy.outputs.api_url }}
+          - API URL: ${API_BASE_URL:-unknown}
           - Image Tag: dev-${{ github.sha }}
           - Branch: ${{ github.ref_name }}
           - Commit: ${{ github.sha }}
