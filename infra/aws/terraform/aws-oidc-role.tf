@@ -177,13 +177,16 @@ data "aws_iam_policy_document" "ecr_policy" {
       "ecr:DescribeImages",
       "ecr:CreateRepository",
       "ecr:TagResource",
+      "ecr:ListTagsForResource",
       "ecr:BatchCheckLayerAvailability",
       "ecr:PutImage",
       "ecr:InitiateLayerUpload",
       "ecr:UploadLayerPart",
       "ecr:CompleteLayerUpload",
       "ecr:BatchGetImage",
-      "ecr:GetDownloadUrlForLayer"
+      "ecr:GetDownloadUrlForLayer",
+      "ecr:GetLifecyclePolicy",
+      "ecr:PutLifecyclePolicy"
     ]
     resources = [
       "arn:aws:ecr:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:repository/rupaya*"
