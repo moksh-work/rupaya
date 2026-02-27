@@ -280,13 +280,27 @@ jobs:
           echo "$TASK_DEF_JSON" > /tmp/task-definition.json
           echo "revision=$(jq -r '.revision' /tmp/task-definition.json)" >> "$GITHUB_OUTPUT"
 
+      - name: Resolve deploy image URI
+        id: deploy-image
+        run: |
+          IMAGE_URI="${{ needs.build.outputs.image_uri }}"
+          IMAGE_URI="$(echo "$IMAGE_URI" | tr -d '\r' | xargs)"
+
+          if [ -z "$IMAGE_URI" ]; then
+            ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+            IMAGE_URI="${ACCOUNT_ID}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:dev-${{ github.sha }}"
+            echo "⚠ build output image_uri missing, using fallback: $IMAGE_URI"
+          fi
+
+          echo "image_uri=$IMAGE_URI" >> "$GITHUB_OUTPUT"
+
       - name: Update task definition with new image
         id: task
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
           task-definition: /tmp/task-definition.json
           container-name: ${{ env.ECS_CONTAINER_NAME }}
-          image: ${{ needs.build.outputs.image_uri }}
+          image: ${{ steps.deploy-image.outputs.image_uri }}
 
       - name: Deploy to ECS
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
