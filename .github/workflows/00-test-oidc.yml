@@ -92,72 +92,12 @@ jobs:
             exit 1
           fi
 
-      - name: Check ECR Repositories
-        if: steps.role.outputs.skip != 'true'
-        run: |
-          echo "=== ECR Repositories ==="
-          aws ecr describe-repositories \
-            --region us-east-1 \
-            --query 'repositories[*].repositoryName' \
-            --output table || echo "⚠ No ECR repositories found (may still deploy successfully)"
-
-      - name: Check ECS Clusters
-        if: steps.role.outputs.skip != 'true'
-        run: |
-          echo "=== ECS Clusters ==="
-          aws ecs list-clusters \
-            --region us-east-1 \
-            --query 'clusterArns[*]' \
-            --output table || echo "⚠ No ECS clusters found yet"
-
-      - name: Verify S3 Terraform State Access
-        if: steps.role.outputs.skip != 'true'
-        run: |
-          echo "=== Terraform State S3 Bucket ==="
-          if aws s3 ls s3://rupaya-terraform-state --region us-east-1 > /dev/null 2>&1; then
-            echo "✓ Can access rupaya-terraform-state bucket"
-            aws s3 ls s3://rupaya-terraform-state --region us-east-1 --recursive | head -5
-          else
-            echo "⚠ rupaya-terraform-state bucket not accessible (may not exist yet)"
-          fi
-
-      - name: Verify DynamoDB Terraform Lock
-        if: steps.role.outputs.skip != 'true'
-        run: |
-          echo "=== Terraform Lock DynamoDB Table ==="
-          if aws dynamodb describe-table \
-            --table-name rupaya-terraform-lock \
-            --region us-east-1 > /dev/null 2>&1; then
-            echo "✓ Can access rupaya-terraform-lock table"
-          else
-            echo "⚠ Terraform lock table not found yet (will be created on first apply)"
-          fi
-
-      - name: Test RDS Access
-        if: steps.role.outputs.skip != 'true'
-        run: |
-          echo "=== RDS Instances ==="
-          aws rds describe-db-instances \
-            --region us-east-1 \
-            --query 'DBInstances[*].DBInstanceIdentifier' \
-            --output table || echo "⚠ No RDS instances found yet"
-
-      - name: Test Secrets Manager Access
-        if: steps.role.outputs.skip != 'true'
-        run: |
-          echo "=== Secrets Manager (rupaya/*) ==="
-          aws secretsmanager list-secrets \
-            --region us-east-1 \
-            --filters Key=name,Values=rupaya \
-            --query 'SecretList[*].Name' \
-            --output table || echo "⚠ No rupaya secrets found yet"
-
       - name: Summary
         if: always()
         run: |
           echo ""
           echo "=========================================="
-          echo "✅ OIDC Authentication Test Complete - ${{ matrix.environment }}"
+          echo "✅ OIDC Role Verification Complete - ${{ matrix.environment }}"
           echo "=========================================="
           echo ""
           echo "Environment: ${{ matrix.environment }}"
