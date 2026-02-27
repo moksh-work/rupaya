@@ -40,6 +40,10 @@ env:
   ECS_CLUSTER: rupaya-dev
   ECS_SERVICE: rupaya-backend-dev
   ECS_CONTAINER_NAME: rupaya-backend
+  SMTP_HOST: ${{ secrets.SMTP_HOST }}
+  SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+  SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+  TEST_REPORT_EMAIL_TO: ${{ secrets.TEST_REPORT_EMAIL_TO }}
 
 jobs:
   # ========== FAST VALIDATION (Lint + Unit Tests) ==========
@@ -453,7 +457,7 @@ jobs:
           JWT_SECRET: test-secret-key-minimum-32-characters-long
           REFRESH_TOKEN_SECRET: test-refresh-secret-key-minimum-32-chars
           ENCRYPTION_KEY: test-encryption-key-minimum-32-chars
-        run: npm test -- __tests__/e2e --coverage --maxWorkers=1
+        run: npm test -- __tests__/e2e --coverage --maxWorkers=1 --json --outputFile=/tmp/e2e-results.json
         timeout-minutes: 15
         continue-on-error: true
 
@@ -466,9 +470,130 @@ jobs:
           JWT_SECRET: test-secret-key-minimum-32-characters-long
           REFRESH_TOKEN_SECRET: test-refresh-secret-key-minimum-32-chars
           ENCRYPTION_KEY: test-encryption-key-minimum-32-chars
-        run: npm test -- __tests__/integration --coverage --maxWorkers=1
+        run: npm test -- __tests__/integration --coverage --maxWorkers=1 --json --outputFile=/tmp/integration-results.json
         timeout-minutes: 15
         continue-on-error: true
+
+      - name: Build test scenario report
+        if: always()
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+
+          const parse = (file) => {
+            if (!fs.existsSync(file)) {
+              return {
+                suite: file,
+                totalTests: 0,
+                passedTests: 0,
+                failedTests: 0,
+                pendingTests: 0,
+                failedCases: []
+              };
+            }
+
+            const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
+            const failedCases = [];
+            for (const tr of raw.testResults || []) {
+              for (const a of tr.assertionResults || []) {
+                if (a.status === 'failed') {
+                  failedCases.push(`${tr.name} :: ${(a.ancestorTitles || []).join(' > ')} > ${a.title}`);
+                }
+              }
+            }
+
+            return {
+              suite: file,
+              totalTests: raw.numTotalTests || 0,
+              passedTests: raw.numPassedTests || 0,
+              failedTests: raw.numFailedTests || 0,
+              pendingTests: raw.numPendingTests || 0,
+              failedCases
+            };
+          };
+
+          const e2e = parse('/tmp/e2e-results.json');
+          const integration = parse('/tmp/integration-results.json');
+          const total = {
+            total: e2e.totalTests + integration.totalTests,
+            passed: e2e.passedTests + integration.passedTests,
+            failed: e2e.failedTests + integration.failedTests,
+            pending: e2e.pendingTests + integration.pendingTests
+          };
+
+          const lines = [];
+          lines.push('# Test Scenario Report');
+          lines.push('');
+          lines.push(`Run ID: ${process.env.GITHUB_RUN_ID}`);
+          lines.push(`Repository: ${process.env.GITHUB_REPOSITORY}`);
+          lines.push(`Branch: ${process.env.GITHUB_REF_NAME}`);
+          lines.push(`Commit: ${process.env.GITHUB_SHA}`);
+          lines.push(`Run URL: https://github.com/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`);
+          lines.push('');
+          lines.push('## Overall');
+          lines.push(`- Total: ${total.total}`);
+          lines.push(`- Passed: ${total.passed}`);
+          lines.push(`- Failed: ${total.failed}`);
+          lines.push(`- Pending/Skipped: ${total.pending}`);
+          lines.push('');
+          lines.push('## E2E');
+          lines.push(`- Total: ${e2e.totalTests}`);
+          lines.push(`- Passed: ${e2e.passedTests}`);
+          lines.push(`- Failed: ${e2e.failedTests}`);
+          lines.push(`- Pending/Skipped: ${e2e.pendingTests}`);
+          lines.push('');
+          lines.push('## Integration');
+          lines.push(`- Total: ${integration.totalTests}`);
+          lines.push(`- Passed: ${integration.passedTests}`);
+          lines.push(`- Failed: ${integration.failedTests}`);
+          lines.push(`- Pending/Skipped: ${integration.pendingTests}`);
+          lines.push('');
+          lines.push('## Failed Scenarios');
+
+          const failedCases = [...e2e.failedCases, ...integration.failedCases];
+          if (failedCases.length === 0) {
+            lines.push('- None');
+          } else {
+            for (const item of failedCases) {
+              lines.push(`- ${item}`);
+            }
+          }
+
+          fs.writeFileSync('/tmp/test-scenarios-report.md', lines.join('\n'));
+          NODE
+
+      - name: Upload test scenario artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev-preview-test-scenarios-${{ github.run_id }}
+          path: |
+            /tmp/test-scenarios-report.md
+            /tmp/e2e-results.json
+            /tmp/integration-results.json
+            backend/coverage/lcov.info
+          if-no-files-found: warn
+
+      - name: Email test scenario report
+        if: always() && env.SMTP_HOST != '' && env.SMTP_USERNAME != '' && env.SMTP_PASSWORD != '' && env.TEST_REPORT_EMAIL_TO != ''
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ env.SMTP_HOST }}
+          server_port: 587
+          username: ${{ env.SMTP_USERNAME }}
+          password: ${{ env.SMTP_PASSWORD }}
+          subject: "Dev Preview Test Report - ${{ github.ref_name }} - ${{ github.sha }}"
+          to: ${{ env.TEST_REPORT_EMAIL_TO }}
+          from: ${{ env.SMTP_USERNAME }}
+          secure: false
+          html_body: |
+            <h3>Dev Preview Test Scenario Report</h3>
+            <p><b>Repository:</b> ${{ github.repository }}</p>
+            <p><b>Branch:</b> ${{ github.ref_name }}</p>
+            <p><b>Commit:</b> ${{ github.sha }}</p>
+            <p><b>Workflow Run:</b> <a href="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}">Open Run</a></p>
+            <p>The detailed report is attached, and artifacts are available from the workflow run.</p>
+          attachments: /tmp/test-scenarios-report.md
 
       - name: Upload E2E coverage
         uses: codecov/codecov-action@v4
