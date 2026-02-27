@@ -40,10 +40,6 @@ env:
   ECS_CLUSTER: rupaya-dev
   ECS_SERVICE: rupaya-backend-dev
   ECS_CONTAINER_NAME: rupaya-backend
-  SMTP_HOST: ${{ secrets.SMTP_HOST }}
-  SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
-  SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
-  TEST_REPORT_EMAIL_TO: ${{ secrets.TEST_REPORT_EMAIL_TO }}
 
 jobs:
   # ========== FAST VALIDATION (Lint + Unit Tests) ==========
@@ -459,7 +455,6 @@ jobs:
           ENCRYPTION_KEY: test-encryption-key-minimum-32-chars
         run: npm test -- __tests__/e2e --coverage --maxWorkers=1 --json --outputFile=/tmp/e2e-results.json
         timeout-minutes: 15
-        continue-on-error: true
 
       - name: Run integration tests
         working-directory: backend
@@ -472,7 +467,6 @@ jobs:
           ENCRYPTION_KEY: test-encryption-key-minimum-32-chars
         run: npm test -- __tests__/integration --coverage --maxWorkers=1 --json --outputFile=/tmp/integration-results.json
         timeout-minutes: 15
-        continue-on-error: true
 
       - name: Build test scenario report
         if: always()
@@ -573,27 +567,6 @@ jobs:
             /tmp/integration-results.json
             backend/coverage/lcov.info
           if-no-files-found: warn
-
-      - name: Email test scenario report
-        if: always() && env.SMTP_HOST != '' && env.SMTP_USERNAME != '' && env.SMTP_PASSWORD != '' && env.TEST_REPORT_EMAIL_TO != ''
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: ${{ env.SMTP_HOST }}
-          server_port: 587
-          username: ${{ env.SMTP_USERNAME }}
-          password: ${{ env.SMTP_PASSWORD }}
-          subject: "Dev Preview Test Report - ${{ github.ref_name }} - ${{ github.sha }}"
-          to: ${{ env.TEST_REPORT_EMAIL_TO }}
-          from: ${{ env.SMTP_USERNAME }}
-          secure: false
-          html_body: |
-            <h3>Dev Preview Test Scenario Report</h3>
-            <p><b>Repository:</b> ${{ github.repository }}</p>
-            <p><b>Branch:</b> ${{ github.ref_name }}</p>
-            <p><b>Commit:</b> ${{ github.sha }}</p>
-            <p><b>Workflow Run:</b> <a href="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}">Open Run</a></p>
-            <p>The detailed report is attached, and artifacts are available from the workflow run.</p>
-          attachments: /tmp/test-scenarios-report.md
 
       - name: Upload E2E coverage
         uses: codecov/codecov-action@v4
