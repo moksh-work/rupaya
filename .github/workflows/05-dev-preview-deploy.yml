@@ -217,7 +217,7 @@ jobs:
     needs: [validate, build]
     runs-on: ubuntu-latest
     if: success()
-    timeout-minutes: 15
+    timeout-minutes: 25
 
     permissions:
       contents: read
@@ -308,7 +308,74 @@ jobs:
           task-definition: ${{ steps.task.outputs.task-definition }}
           service: ${{ env.ECS_SERVICE }}
           cluster: ${{ env.ECS_CLUSTER }}
-          wait-for-service-stability: true
+          wait-for-service-stability: false
+
+      - name: Wait for ECS rollout (bounded)
+        run: |
+          echo "⏳ Waiting for ECS rollout to stabilize (max ~6 minutes)..."
+
+          for i in {1..24}; do
+            SERVICE_JSON=$(aws ecs describe-services \
+              --cluster "${{ env.ECS_CLUSTER }}" \
+              --services "${{ env.ECS_SERVICE }}" \
+              --region "${{ env.AWS_REGION }}" \
+              --query 'services[0]' \
+              --output json)
+
+            RUNNING=$(echo "$SERVICE_JSON" | jq -r '.runningCount // 0')
+            PENDING=$(echo "$SERVICE_JSON" | jq -r '.pendingCount // 0')
+            PRIMARY_STATE=$(echo "$SERVICE_JSON" | jq -r '.deployments[] | select(.status=="PRIMARY") | .rolloutState // "UNKNOWN"')
+
+            echo "Attempt $i/24: running=$RUNNING pending=$PENDING primary_rollout_state=$PRIMARY_STATE"
+
+            if [ "$PRIMARY_STATE" = "COMPLETED" ] && [ "$RUNNING" -ge 1 ]; then
+              echo "✅ ECS rollout stabilized"
+              exit 0
+            fi
+
+            sleep 15
+          done
+
+          echo "❌ ECS rollout did not stabilize within expected time"
+          echo "Recent ECS events:"
+          aws ecs describe-services \
+            --cluster "${{ env.ECS_CLUSTER }}" \
+            --services "${{ env.ECS_SERVICE }}" \
+            --region "${{ env.AWS_REGION }}" \
+            --query 'services[0].events[0:10].[createdAt,message]' \
+            --output table || true
+
+          STOPPED_TASK_ARN=$(aws ecs list-tasks \
+            --cluster "${{ env.ECS_CLUSTER }}" \
+            --service-name "${{ env.ECS_SERVICE }}" \
+            --desired-status STOPPED \
+            --region "${{ env.AWS_REGION }}" \
+            --query 'taskArns[0]' \
+            --output text)
+
+          if [ -n "$STOPPED_TASK_ARN" ] && [ "$STOPPED_TASK_ARN" != "None" ]; then
+            TASK_ID=$(echo "$STOPPED_TASK_ARN" | awk -F/ '{print $NF}')
+            LOG_STREAM="ecs/rupaya-backend/${TASK_ID}"
+
+            echo "Latest stopped task: $STOPPED_TASK_ARN"
+            aws ecs describe-tasks \
+              --cluster "${{ env.ECS_CLUSTER }}" \
+              --tasks "$STOPPED_TASK_ARN" \
+              --region "${{ env.AWS_REGION }}" \
+              --query 'tasks[0].{stoppedReason:stoppedReason,containers:containers[].{name:name,lastStatus:lastStatus,exitCode:exitCode,reason:reason}}' \
+              --output json || true
+
+            echo "Recent container logs from /ecs/rupaya-backend-dev/$LOG_STREAM:"
+            aws logs get-log-events \
+              --log-group-name "/ecs/rupaya-backend-dev" \
+              --log-stream-name "$LOG_STREAM" \
+              --region "${{ env.AWS_REGION }}" \
+              --limit 60 \
+              --query 'events[*].message' \
+              --output text || true
+          fi
+
+          exit 1
 
       - name: Get ECS service details
         id: service
