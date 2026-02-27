@@ -1,7 +1,37 @@
 // Knexfile for database migrations
 require('dotenv').config();
 
-const dbSslEnabled = process.env.DB_SSL === 'true' || process.env.NODE_ENV === 'production';
+function inferSslFromDatabaseUrl(databaseUrl) {
+  if (!databaseUrl) {
+    return false;
+  }
+
+  try {
+    const parsedUrl = new URL(databaseUrl);
+    const host = (parsedUrl.hostname || '').toLowerCase();
+    return host !== 'localhost' && host !== '127.0.0.1' && host !== 'postgres';
+  } catch (error) {
+    return true;
+  }
+}
+
+function isSslEnabled() {
+  if (process.env.DB_SSL === 'true') {
+    return true;
+  }
+
+  if (process.env.DB_SSL === 'false') {
+    return false;
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    return true;
+  }
+
+  return inferSslFromDatabaseUrl(process.env.DATABASE_URL);
+}
+
+const dbSslEnabled = isSslEnabled();
 
 function sanitizeDatabaseUrl(databaseUrl) {
   try {
