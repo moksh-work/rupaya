@@ -30,9 +30,6 @@ jobs:
       fail-fast: false
     environment: ${{ matrix.environment }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Set Role ARN
         id: role
         run: |
@@ -57,6 +54,18 @@ jobs:
             echo "skip=false" >> $GITHUB_OUTPUT
             echo "role_arn=$ROLE_ARN" >> $GITHUB_OUTPUT
           fi
+
+      - name: Validate Role ARN Format
+        if: steps.role.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          ROLE_ARN="${{ steps.role.outputs.role_arn }}"
+          if [[ ! "$ROLE_ARN" =~ ^arn:aws:iam::[0-9]{12}:role/.+ ]]; then
+            echo "✗ Secret for ${{ matrix.environment }} must be a full IAM Role ARN."
+            echo "  Expected: arn:aws:iam::<account-id>:role/<role-name>"
+            exit 1
+          fi
+          echo "✓ Role ARN format is valid"
 
       - name: Configure AWS Credentials (OIDC)
         if: steps.role.outputs.skip != 'true'
@@ -95,22 +104,13 @@ jobs:
         run: |
           echo ""
           echo "=========================================="
-          echo "✅ OIDC Role Verification Complete - ${{ matrix.environment }}"
+          echo "OIDC Role Verification - ${{ matrix.environment }}"
           echo "=========================================="
           echo ""
           echo "Environment: ${{ matrix.environment }}"
-          echo "Role ARN: ${{ steps.role.outputs.role_arn }}"
+          echo "Role ARN configured: ${{ steps.role.outputs.skip != 'true' }}"
           if [ "${{ steps.role.outputs.skip }}" = "true" ]; then
             echo "Status: Skipped (missing secret)"
           else
-            echo "Status: Completed"
+            echo "Status: ${{ job.status }}"
           fi
-          echo ""
-          echo "Next steps:"
-          echo "1. Verify all three role ARNs in GitHub secrets:"
-          echo "   - AWS_OIDC_ROLE_ARN_DEV (development)"
-          echo "   - AWS_OIDC_ROLE_ARN_STAGING (staging)"
-          echo "   - AWS_OIDC_ROLE_ARN_PROD (production)"
-          echo "2. Ensure development/staging/production environments exist"
-          echo "3. Workflows 05-07 will use environment-specific roles"
-          echo ""
