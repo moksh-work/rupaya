@@ -256,10 +256,13 @@ data "aws_iam_policy_document" "terraform_state_policy" {
     sid    = "TerraformStateS3"
     effect = "Allow"
     actions = [
+      "s3:CreateBucket",
       "s3:ListBucket",
       "s3:GetObject",
       "s3:PutObject",
-      "s3:DeleteObject"
+      "s3:DeleteObject",
+      "s3:PutBucketVersioning",
+      "s3:PutBucketEncryption"
     ]
     resources = [
       "arn:aws:s3:::rupaya-terraform-state*",
@@ -271,6 +274,7 @@ data "aws_iam_policy_document" "terraform_state_policy" {
     sid    = "TerraformStateLock"
     effect = "Allow"
     actions = [
+      "dynamodb:CreateTable",
       "dynamodb:DescribeTable",
       "dynamodb:GetItem",
       "dynamodb:PutItem",
