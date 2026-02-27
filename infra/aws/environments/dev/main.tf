@@ -10,14 +10,13 @@ terraform {
       version = "~> 3.0"
     }
   }
-  # Uncomment when ready to use remote state
-  # backend "s3" {
-  #   bucket         = "rupaya-terraform-state"
-  #   key            = "dev/terraform.tfstate"
-  #   region         = "us-east-1"
-  #   encrypt        = true
-  #   dynamodb_table = "terraform-locks"
-  # }
+  backend "s3" {
+    bucket         = "rupaya-terraform-state"
+    key            = "environments/dev/terraform.tfstate"
+    region         = "us-east-1"
+    encrypt        = true
+    dynamodb_table = "rupaya-terraform-lock"
+  }
 }
 
 provider "aws" {
