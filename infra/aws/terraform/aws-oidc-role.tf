@@ -262,8 +262,8 @@ data "aws_iam_policy_document" "terraform_state_policy" {
       "s3:DeleteObject"
     ]
     resources = [
-      "arn:aws:s3:::rupaya-terraform-state",
-      "arn:aws:s3:::rupaya-terraform-state/*"
+      "arn:aws:s3:::rupaya-terraform-state*",
+      "arn:aws:s3:::rupaya-terraform-state*/*"
     ]
   }
 
@@ -277,7 +277,7 @@ data "aws_iam_policy_document" "terraform_state_policy" {
       "dynamodb:DeleteItem"
     ]
     resources = [
-      "arn:aws:dynamodb:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:table/rupaya-terraform-lock"
+      "arn:aws:dynamodb:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:table/rupaya-terraform-lock*"
     ]
   }
 }
