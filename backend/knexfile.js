@@ -1,22 +1,29 @@
 // Knexfile for database migrations
 require('dotenv').config();
 
-const developmentConnection = process.env.DATABASE_URL || {
-  host: process.env.DB_HOST || 'postgres',
-  port: process.env.DB_PORT || 5432,
-  user: process.env.DB_USER || 'rupaya',
-  password: process.env.DB_PASSWORD || 'secure_password_here',
-  database: process.env.DB_NAME || 'rupaya_dev'
-};
+const dbSslEnabled = process.env.DB_SSL === 'true' || process.env.NODE_ENV === 'production';
 
-const productionConnection = process.env.DATABASE_URL || {
-  host: process.env.DB_HOST,
-  port: process.env.DB_PORT || 5432,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false
-};
+function buildConnection(defaultHost) {
+  if (process.env.DATABASE_URL) {
+    return {
+      connectionString: process.env.DATABASE_URL,
+      ssl: dbSslEnabled ? { rejectUnauthorized: false } : false
+    };
+  }
+
+  return {
+    host: process.env.DB_HOST || defaultHost,
+    port: process.env.DB_PORT || 5432,
+    user: process.env.DB_USER || 'rupaya',
+    password: process.env.DB_PASSWORD || 'secure_password_here',
+    database: process.env.DB_NAME || 'rupaya_dev',
+    ssl: dbSslEnabled ? { rejectUnauthorized: false } : false
+  };
+}
+
+const developmentConnection = buildConnection('postgres');
+
+const productionConnection = buildConnection(undefined);
 
 module.exports = {
   development: {
