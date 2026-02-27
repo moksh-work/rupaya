@@ -268,8 +268,11 @@ jobs:
       - name: Build & push
         run: |
           IMAGE="${{ steps.ecr.outputs.registry }}/rupaya-backend:${IMAGE_TAG}"
+          IMAGE_LATEST="${{ steps.ecr.outputs.registry }}/rupaya-backend:latest"
           docker build -t "$IMAGE" ./backend
+          docker tag "$IMAGE" "$IMAGE_LATEST"
           docker push "$IMAGE"
+          docker push "$IMAGE_LATEST"
           echo "IMAGE=$IMAGE" >> $GITHUB_ENV
 
       - name: Export image uri

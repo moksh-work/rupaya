@@ -216,7 +216,7 @@ jobs:
     name: Deploy to Dev ECS
     needs: [validate, build]
     runs-on: ubuntu-latest
-    if: success() && github.event_name != 'push'
+    if: success()
     timeout-minutes: 15
 
     permissions:
@@ -289,44 +289,12 @@ jobs:
           image: ${{ needs.build.outputs.image-uri }}
 
       - name: Deploy to ECS
-        run: |
-          aws ecs update-service \
-            --cluster ${{ env.ECS_CLUSTER }} \
-            --service ${{ env.ECS_SERVICE }} \
-            --task-definition ${{ steps.task.outputs.task-definition }} \
-            --force-new-deployment \
-            --region ${{ env.AWS_REGION }}
-
-      - name: Wait for rollout to complete
-        run: |
-          DEPLOYMENT_COMPLETE=false
-          MAX_ATTEMPTS=30
-          ATTEMPT=0
-          
-          while [ "$DEPLOYMENT_COMPLETE" != "true" ] && [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
-            DEPLOYMENT=$(aws ecs describe-services \
-              --cluster ${{ env.ECS_CLUSTER }} \
-              --services ${{ env.ECS_SERVICE }} \
-              --region ${{ env.AWS_REGION }} \
-              --query 'services[0].deployments' \
-              --output json)
-            
-            ACTIVE_COUNT=$(echo "$DEPLOYMENT" | jq '[.[] | select(.status == "PRIMARY")] | length')
-            
-            if [ "$ACTIVE_COUNT" = "1" ]; then
-              DEPLOYMENT_COMPLETE=true
-              echo "✅ Deployment completed successfully"
-            else
-              ATTEMPT=$((ATTEMPT + 1))
-              echo "⏳ Waiting for deployment... (Attempt $ATTEMPT/$MAX_ATTEMPTS)"
-              sleep 30
-            fi
-          done
-          
-          if [ "$DEPLOYMENT_COMPLETE" != "true" ]; then
-            echo "❌ Deployment timeout after 15 minutes"
-            exit 1
-          fi
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.task.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
 
       - name: Get ECS service details
         id: service
@@ -338,22 +306,32 @@ jobs:
             --query 'services[0]' \
             --output json)
           
-          # Extract load balancer target group DNS
-          # This is a simplified approach; adjust based on your LB setup
-          LB_DNS=$(echo "$SERVICE_INFO" | jq -r '.loadBalancers[0].targetGroupArn' | grep -o 'targetgroup/[^/]*/[^/]*' | cut -d'/' -f2-)
-          
-          # For now, use a known dev URL pattern
-          echo "api_url=https://dev-${{ github.run_id }}.rupaya.internal" >> "$GITHUB_OUTPUT"
+          LB_DNS=$(aws elbv2 describe-load-balancers \
+            --names rupaya-backend-dev-alb \
+            --region ${{ env.AWS_REGION }} \
+            --query 'LoadBalancers[0].DNSName' \
+            --output text)
+
+          echo "api_url=http://$LB_DNS" >> "$GITHUB_OUTPUT"
           echo "service_arn=$(echo $SERVICE_INFO | jq -r '.serviceArn')" >> "$GITHUB_OUTPUT"
 
       - name: Health check
         run: |
-          HEALTH_URL="http://localhost:3000/health"
+          HEALTH_URL="${{ steps.service.outputs.api_url }}/health"
           echo "🔍 Checking health endpoint at $HEALTH_URL..."
-          
-          # For ECS, you would check the service health through task IPs
-          # This is a simplified example; adjust based on your infrastructure
-          echo "✅ Deployment health check complete"
+
+          for i in {1..20}; do
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" "$HEALTH_URL" || true)
+            if [ "$CODE" = "200" ]; then
+              echo "✅ Deployment health check passed"
+              exit 0
+            fi
+            echo "⏳ Waiting for healthy response (attempt $i/20), status=$CODE"
+            sleep 15
+          done
+
+          echo "❌ Health check failed: $HEALTH_URL"
+          exit 1
 
   # ========== E2E TESTS (Against Live Dev Environment) ==========
   e2e-tests:
