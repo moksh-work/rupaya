@@ -224,7 +224,7 @@ jobs:
       id-token: write
 
     outputs:
-      api-url: ${{ steps.service.outputs.api_url }}
+      api_url: ${{ steps.service.outputs.api_url }}
       deployment-status: ${{ job.status }}
 
     steps:
@@ -447,7 +447,7 @@ jobs:
           NODE_ENV: test
           RUN_REMOTE_TESTS: 'true'
           RUN_E2E_TESTS: 'true'
-          API_BASE_URL: ${{ needs.deploy.outputs['api-url'] }}
+          API_BASE_URL: ${{ needs.deploy.outputs.api_url }}
           DATABASE_URL: postgres://test_user:test_password@localhost:5432/rupaya_test
           REDIS_URL: redis://localhost:6379
           JWT_SECRET: test-secret-key-minimum-32-characters-long
@@ -598,7 +598,7 @@ jobs:
           - E2E Tests: ⏳ IN_PROGRESS
           
           **Environment Details:**
-          - API URL: ${{ needs.deploy.outputs.api-url }}
+          - API URL: ${{ needs.deploy.outputs.api_url }}
           - Image Tag: dev-${{ github.sha }}
           - Branch: ${{ github.ref_name }}
           - Commit: ${{ github.sha }}
@@ -660,7 +660,7 @@ jobs:
             
             **Deployment Details:**
             - **Image Tag:** \`dev-${{ github.sha }}\`
-            - **API URL:** \`${{ needs.deploy.outputs.api-url || 'Pending deployment...' }}\`
+            - **API URL:** \`${{ needs.deploy.outputs.api_url || 'Pending deployment...' }}\`
             - **Branch:** \`${{ github.ref_name }}\`
             - **Commit:** [${{ github.sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
             
@@ -703,7 +703,7 @@ jobs:
                 title: 'Dev Preview Deployment',
                 summary: 'Feature branch deployed to development environment',
                 text: `Image: dev-${{ github.sha }}
-            API: ${{ needs.deploy.outputs.api-url || 'pending' }}
+            API: ${{ needs.deploy.outputs.api_url || 'pending' }}
             Branch: ${{ github.ref_name }}`
               }
             });
