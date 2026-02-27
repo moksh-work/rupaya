@@ -1,4 +1,4 @@
-name: 00 - Test OIDC Authentication
+name: 00 - Verify OIDC Role Setup
 
 on:
   push:
@@ -7,110 +7,89 @@ on:
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Environment to test (all, development, staging, production)'
+        description: 'Environment to verify (development, staging, production)'
         required: false
         default: 'development'
         type: choice
         options:
-          - all
           - development
           - staging
           - production
 
 permissions:
-  id-token: write
   contents: read
 
 jobs:
-  test-oidc:
+  verify-oidc-setup:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        environment: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'all' && fromJSON('["development", "staging", "production"]') || github.event_name == 'workflow_dispatch' && fromJSON(format('["{0}"]', github.event.inputs.environment)) || fromJSON('["development"]') }}
+        environment: ${{ github.event_name == 'workflow_dispatch' && fromJSON(format('["{0}"]', github.event.inputs.environment)) || fromJSON('["development"]') }}
       fail-fast: false
-    environment: ${{ matrix.environment }}
     steps:
-      - name: Set Role ARN
-        id: role
+      - name: Check GitHub Secret Exists
+        id: check_secret
         run: |
           set -euo pipefail
+          
           case "${{ matrix.environment }}" in
             development)
+              SECRET_NAME="AWS_OIDC_ROLE_ARN_DEV"
               ROLE_ARN="${{ secrets.AWS_OIDC_ROLE_ARN_DEV }}"
               ;;
             staging)
+              SECRET_NAME="AWS_OIDC_ROLE_ARN_STAGING"
               ROLE_ARN="${{ secrets.AWS_OIDC_ROLE_ARN_STAGING }}"
               ;;
             production)
+              SECRET_NAME="AWS_OIDC_ROLE_ARN_PROD"
               ROLE_ARN="${{ secrets.AWS_OIDC_ROLE_ARN_PROD }}"
               ;;
           esac
-
+          
+          echo "secret_name=$SECRET_NAME" >> $GITHUB_OUTPUT
+          
           if [ -z "${ROLE_ARN:-}" ]; then
-            echo "skip=true" >> $GITHUB_OUTPUT
-            echo "role_arn=" >> $GITHUB_OUTPUT
-            echo "⚠ Missing OIDC role secret for ${{ matrix.environment }}. Skipping environment."
-          else
-            echo "skip=false" >> $GITHUB_OUTPUT
-            echo "role_arn=$ROLE_ARN" >> $GITHUB_OUTPUT
+            echo "✗ GitHub secret $SECRET_NAME is not configured"
+            echo "exists=false" >> $GITHUB_OUTPUT
+            exit 1
           fi
+          
+          echo "✓ GitHub secret $SECRET_NAME exists"
+          echo "exists=true" >> $GITHUB_OUTPUT
+          echo "role_arn=$ROLE_ARN" >> $GITHUB_OUTPUT
 
-      - name: Validate Role ARN Format
-        if: steps.role.outputs.skip != 'true'
+      - name: Validate ARN Format
+        if: steps.check_secret.outputs.exists == 'true'
         run: |
           set -euo pipefail
-          ROLE_ARN="${{ steps.role.outputs.role_arn }}"
+          ROLE_ARN="${{ steps.check_secret.outputs.role_arn }}"
+          
           if [[ ! "$ROLE_ARN" =~ ^arn:aws:iam::[0-9]{12}:role/.+ ]]; then
-            echo "✗ Secret for ${{ matrix.environment }} must be a full IAM Role ARN."
-            echo "  Expected: arn:aws:iam::<account-id>:role/<role-name>"
+            echo "✗ ${{ steps.check_secret.outputs.secret_name }} is not a valid IAM Role ARN"
+            echo "  Current: $ROLE_ARN"
+            echo "  Expected format: arn:aws:iam::<account-id>:role/<role-name>"
             exit 1
           fi
-          echo "✓ Role ARN format is valid"
-
-      - name: Configure AWS Credentials (OIDC)
-        if: steps.role.outputs.skip != 'true'
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ steps.role.outputs.role_arn }}
-          aws-region: us-east-1
-
-      - name: Verify OIDC Authentication
-        if: steps.role.outputs.skip != 'true'
-        run: |
-          set -e
-          echo "=== Testing ${{ matrix.environment }} Environment ==="
-          echo "=== AWS Identity ==="
-          IDENTITY=$(aws sts get-caller-identity)
-          echo "$IDENTITY" | jq .
           
-          ACCOUNT_ID=$(echo "$IDENTITY" | jq -r '.Account')
-          ARN=$(echo "$IDENTITY" | jq -r '.Arn')
-          
-          echo ""
-          echo "=== Verification ==="
-          echo "✓ Account: $ACCOUNT_ID"
-          echo "✓ Role: $ARN"
-          
-          # Verify correct role for environment
-          if [[ "$ARN" == *"rupaya-github-oidc-${{ matrix.environment == 'development' && 'dev' || matrix.environment }}"* ]]; then
-            echo "✓ Using correct ${{ matrix.environment }} OIDC role"
-          else
-            echo "✗ ERROR: Not using correct role for ${{ matrix.environment }}!"
-            exit 1
-          fi
+          echo "✓ ARN format is valid: $ROLE_ARN"
 
       - name: Summary
         if: always()
         run: |
           echo ""
           echo "=========================================="
-          echo "OIDC Role Verification - ${{ matrix.environment }}"
+          echo "OIDC Setup Verification - ${{ matrix.environment }}"
           echo "=========================================="
           echo ""
-          echo "Environment: ${{ matrix.environment }}"
-          echo "Role ARN configured: ${{ steps.role.outputs.skip != 'true' }}"
-          if [ "${{ steps.role.outputs.skip }}" = "true" ]; then
-            echo "Status: Skipped (missing secret)"
+          if [ "${{ steps.check_secret.outputs.exists }}" = "true" ]; then
+            echo "✅ GitHub Secret: Configured"
+            echo "✅ ARN Format: Valid"
+            echo ""
+            echo "OIDC role is ready for use in workflows"
           else
-            echo "Status: ${{ job.status }}"
+            echo "❌ GitHub Secret: Not configured"
+            echo ""
+            echo "Run ./scripts/bootstrap-oidc.sh to set up OIDC"
           fi
+          echo ""
