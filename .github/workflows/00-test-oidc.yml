@@ -16,8 +16,6 @@ on:
           - development
           - staging
           - production
-  schedule:
-    - cron: '0 3 * * 0'  # Weekly health check
 
 permissions:
   id-token: write
