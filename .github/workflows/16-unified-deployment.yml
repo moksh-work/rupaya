@@ -19,11 +19,6 @@ on:
       - release/**
     tags:
       - 'v*.*.*'
-    paths:
-      - 'backend/**'
-      - 'shared/**'
-      - 'infra/aws/**'
-      - '.github/workflows/16-unified-deployment.yml'
 
   workflow_dispatch:
     inputs:

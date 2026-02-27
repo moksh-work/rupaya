@@ -12,12 +12,6 @@ on:
       - 'feature/**'
       - 'bugfix/**'
       - 'chore/**'
-    paths:
-      - 'backend/**'
-      - 'shared/**'
-      - '.github/workflows/05-dev-preview-deploy.yml'
-      - '!docs/**'
-      - '!*.md'
   pull_request:
     branches: 
       - develop
