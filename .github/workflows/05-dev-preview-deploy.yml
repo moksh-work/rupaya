@@ -35,8 +35,7 @@ permissions:
 
 env:
   AWS_REGION: us-east-1
-  AWS_ROLE_ARN: arn:aws:iam::992382556348:role/rupaya-github-oidc-dev
-  AWS_ACCOUNT_ID: '992382556348'
+  AWS_ROLE_ARN: ${{ secrets.AWS_OIDC_ROLE_ARN_DEV }}
   ECR_REPOSITORY: rupaya-backend
   ECS_CLUSTER: rupaya-dev-cluster
   ECS_SERVICE: rupaya-backend-dev
