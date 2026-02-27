@@ -1,16 +1,27 @@
 // Knexfile for database migrations
 require('dotenv').config();
 
+const developmentConnection = process.env.DATABASE_URL || {
+  host: process.env.DB_HOST || 'postgres',
+  port: process.env.DB_PORT || 5432,
+  user: process.env.DB_USER || 'rupaya',
+  password: process.env.DB_PASSWORD || 'secure_password_here',
+  database: process.env.DB_NAME || 'rupaya_dev'
+};
+
+const productionConnection = process.env.DATABASE_URL || {
+  host: process.env.DB_HOST,
+  port: process.env.DB_PORT || 5432,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
+  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false
+};
+
 module.exports = {
   development: {
     client: 'postgresql',
-    connection: {
-      host: process.env.DB_HOST || 'postgres',
-      port: process.env.DB_PORT || 5432,
-      user: process.env.DB_USER || 'rupaya',
-      password: process.env.DB_PASSWORD || 'secure_password_here',
-      database: process.env.DB_NAME || 'rupaya_dev'
-    },
+    connection: developmentConnection,
     pool: {
       min: 2,
       max: 10
@@ -42,14 +53,7 @@ module.exports = {
 
   production: {
     client: 'postgresql',
-    connection: {
-      host: process.env.DB_HOST,
-      port: process.env.DB_PORT || 5432,
-      user: process.env.DB_USER,
-      password: process.env.DB_PASSWORD,
-      database: process.env.DB_NAME,
-      ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false
-    },
+    connection: productionConnection,
     pool: {
       min: 2,
       max: 20
