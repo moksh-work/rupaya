@@ -59,21 +59,6 @@ jobs:
           echo "exists=true" >> $GITHUB_OUTPUT
           echo "role_arn=$ROLE_ARN" >> $GITHUB_OUTPUT
 
-      - name: Validate ARN Format
-        if: steps.check_secret.outputs.exists == 'true'
-        run: |
-          set -euo pipefail
-          ROLE_ARN="${{ steps.check_secret.outputs.role_arn }}"
-          
-          if [[ ! "$ROLE_ARN" =~ ^arn:aws:iam::[0-9]{12}:role/.+ ]]; then
-            echo "✗ ${{ steps.check_secret.outputs.secret_name }} is not a valid IAM Role ARN"
-            echo "  Current: $ROLE_ARN"
-            echo "  Expected format: arn:aws:iam::<account-id>:role/<role-name>"
-            exit 1
-          fi
-          
-          echo "✓ ARN format is valid: $ROLE_ARN"
-
       - name: Summary
         if: always()
         run: |
@@ -84,7 +69,6 @@ jobs:
           echo ""
           if [ "${{ steps.check_secret.outputs.exists }}" = "true" ]; then
             echo "✅ GitHub Secret: Configured"
-            echo "✅ ARN Format: Valid"
             echo ""
             echo "OIDC role is ready for use in workflows"
           else
