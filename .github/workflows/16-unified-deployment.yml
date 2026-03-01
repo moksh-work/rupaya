@@ -132,6 +132,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [determine-environment, prerequisite-check, validate]
     if: needs.determine-environment.outputs.deploy == 'true' && needs.prerequisite-check.outputs.ready == 'true'
+    environment: ${{ needs.determine-environment.outputs.environment }}
     outputs:
       image_uri: ${{ steps.image.outputs.image_uri }}
     env:
@@ -153,20 +154,34 @@ jobs:
               dev)
                 ROLE_ARN="${{ secrets.AWS_OIDC_ROLE_ARN_DEV }}"
                 if [[ -z "$ROLE_ARN" ]]; then
+                  ROLE_ARN="${{ vars.AWS_OIDC_ROLE_ARN_DEV }}"
+                fi
+                if [[ -z "$ROLE_ARN" ]]; then
                   ROLE_ARN="arn:aws:iam::368613568221:role/rupaya-github-oidc-dev"
                 fi
                 ;;
               staging)
                 ROLE_ARN="${{ secrets.AWS_OIDC_ROLE_ARN_STAGING }}"
+                if [[ -z "$ROLE_ARN" ]]; then
+                  ROLE_ARN="${{ vars.AWS_OIDC_ROLE_ARN_STAGING }}"
+                fi
                 ;;
               prod)
                 ROLE_ARN="${{ secrets.AWS_OIDC_ROLE_ARN_PROD }}"
+                if [[ -z "$ROLE_ARN" ]]; then
+                  ROLE_ARN="${{ vars.AWS_OIDC_ROLE_ARN_PROD }}"
+                fi
                 ;;
               *) exit 1 ;;
             esac
           fi
 
           ROLE_ARN="$(echo "$ROLE_ARN" | tr -d '\r' | xargs)"
+
+          if [[ "$ENVIRONMENT" == "dev" && "$ROLE_ARN" != arn:aws:iam::*:role/* ]]; then
+            ROLE_ARN="arn:aws:iam::368613568221:role/rupaya-github-oidc-dev"
+          fi
+
           if [[ -z "$ROLE_ARN" || "$ROLE_ARN" != arn:aws:iam::*:role/* ]]; then
             echo "Invalid or missing role ARN for environment: $ENVIRONMENT"
             echo "Hint: set secret AWS_OIDC_ROLE_ARN_${ENVIRONMENT^^} or provide role_arn_override in manual run"
@@ -208,6 +223,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [determine-environment, prerequisite-check, build-and-push]
     if: needs.determine-environment.outputs.deploy == 'true' && needs.prerequisite-check.outputs.ready == 'true'
+    environment: ${{ needs.determine-environment.outputs.environment }}
     env:
       ENVIRONMENT: ${{ needs.determine-environment.outputs.environment }}
     steps:
@@ -226,20 +242,34 @@ jobs:
               dev)
                 ROLE_ARN="${{ secrets.AWS_OIDC_ROLE_ARN_DEV }}"
                 if [[ -z "$ROLE_ARN" ]]; then
+                  ROLE_ARN="${{ vars.AWS_OIDC_ROLE_ARN_DEV }}"
+                fi
+                if [[ -z "$ROLE_ARN" ]]; then
                   ROLE_ARN="arn:aws:iam::368613568221:role/rupaya-github-oidc-dev"
                 fi
                 ;;
               staging)
                 ROLE_ARN="${{ secrets.AWS_OIDC_ROLE_ARN_STAGING }}"
+                if [[ -z "$ROLE_ARN" ]]; then
+                  ROLE_ARN="${{ vars.AWS_OIDC_ROLE_ARN_STAGING }}"
+                fi
                 ;;
               prod)
                 ROLE_ARN="${{ secrets.AWS_OIDC_ROLE_ARN_PROD }}"
+                if [[ -z "$ROLE_ARN" ]]; then
+                  ROLE_ARN="${{ vars.AWS_OIDC_ROLE_ARN_PROD }}"
+                fi
                 ;;
               *) exit 1 ;;
             esac
           fi
 
           ROLE_ARN="$(echo "$ROLE_ARN" | tr -d '\r' | xargs)"
+
+          if [[ "$ENVIRONMENT" == "dev" && "$ROLE_ARN" != arn:aws:iam::*:role/* ]]; then
+            ROLE_ARN="arn:aws:iam::368613568221:role/rupaya-github-oidc-dev"
+          fi
+
           if [[ -z "$ROLE_ARN" || "$ROLE_ARN" != arn:aws:iam::*:role/* ]]; then
             echo "Invalid or missing role ARN for environment: $ENVIRONMENT"
             echo "Hint: set secret AWS_OIDC_ROLE_ARN_${ENVIRONMENT^^} or provide role_arn_override in manual run"
