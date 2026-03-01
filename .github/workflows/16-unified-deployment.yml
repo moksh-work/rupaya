@@ -26,6 +26,7 @@ jobs:
   determine-environment:
     name: Determine Environment
     runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
     outputs:
       environment: ${{ steps.set.outputs.environment }}
       deploy: ${{ steps.set.outputs.deploy }}
@@ -43,20 +44,8 @@ jobs:
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             ENV="${{ github.event.inputs.environment }}"
             DEPLOY="true"
-            BRANCH="manual"
+            BRANCH="${{ github.ref_name }}"
             SHA="${{ github.sha }}"
-          elif [[ "${{ github.ref }}" == refs/heads/feature/* || "${{ github.ref }}" == refs/heads/bugfix/* || "${{ github.ref }}" == refs/heads/chore/* ]]; then
-            ENV="dev"
-            DEPLOY="true"
-            BRANCH="${{ github.ref_name }}"
-          elif [[ "${{ github.ref }}" == refs/heads/release/* ]]; then
-            ENV="staging"
-            DEPLOY="true"
-            BRANCH="${{ github.ref_name }}"
-          elif [[ "${{ github.ref }}" == "refs/heads/main" || "${{ github.ref }}" == refs/tags/v* ]]; then
-            ENV="prod"
-            DEPLOY="true"
-            BRANCH="${{ github.ref_name }}"
           fi
 
           echo "environment=$ENV" >> $GITHUB_OUTPUT
