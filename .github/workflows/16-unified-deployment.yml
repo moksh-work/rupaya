@@ -172,18 +172,17 @@ jobs:
                   ROLE_ARN="${{ vars.AWS_OIDC_ROLE_ARN_PROD }}"
                 fi
                 ;;
-              *) exit 1 ;;
             esac
           fi
 
           ROLE_ARN="$(echo "$ROLE_ARN" | tr -d '\r' | xargs)"
 
-          if [[ "$ENVIRONMENT" == "dev" && "$ROLE_ARN" != arn:aws:iam::*:role/* ]]; then
+          if [[ -z "$ROLE_ARN" ]]; then
             ROLE_ARN="arn:aws:iam::368613568221:role/rupaya-github-oidc-dev"
           fi
 
-          if [[ -z "$ROLE_ARN" || "$ROLE_ARN" != arn:aws:iam::*:role/* ]]; then
-            echo "Invalid or missing role ARN for environment: $ENVIRONMENT"
+          if [[ "$ROLE_ARN" != arn:aws:iam::*:role/* ]]; then
+            echo "Invalid role ARN format: $ROLE_ARN"
             echo "Hint: set secret AWS_OIDC_ROLE_ARN_${ENVIRONMENT^^} or provide role_arn_override in manual run"
             exit 1
           fi
@@ -260,18 +259,17 @@ jobs:
                   ROLE_ARN="${{ vars.AWS_OIDC_ROLE_ARN_PROD }}"
                 fi
                 ;;
-              *) exit 1 ;;
             esac
           fi
 
           ROLE_ARN="$(echo "$ROLE_ARN" | tr -d '\r' | xargs)"
 
-          if [[ "$ENVIRONMENT" == "dev" && "$ROLE_ARN" != arn:aws:iam::*:role/* ]]; then
+          if [[ -z "$ROLE_ARN" ]]; then
             ROLE_ARN="arn:aws:iam::368613568221:role/rupaya-github-oidc-dev"
           fi
 
-          if [[ -z "$ROLE_ARN" || "$ROLE_ARN" != arn:aws:iam::*:role/* ]]; then
-            echo "Invalid or missing role ARN for environment: $ENVIRONMENT"
+          if [[ "$ROLE_ARN" != arn:aws:iam::*:role/* ]]; then
+            echo "Invalid role ARN format: $ROLE_ARN"
             echo "Hint: set secret AWS_OIDC_ROLE_ARN_${ENVIRONMENT^^} or provide role_arn_override in manual run"
             exit 1
           fi
