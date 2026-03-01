@@ -252,7 +252,8 @@ jobs:
           cd backend
           npm ci
           npx --yes @cyclonedx/cyclonedx-npm --output-file ../backend-sbom.json --output-format json || \
-          npx --yes @cyclonedx/cyclonedx-npm@latest --output-file ../backend-sbom.json --output-format json
+          npx --yes @cyclonedx/cyclonedx-npm@latest --output-file ../backend-sbom.json --output-format json || \
+          npm sbom --package-lock-only --sbom-format cyclonedx --json > ../backend-sbom.json
           test -s ../backend-sbom.json
 
       - name: Upload SBOM artifact
