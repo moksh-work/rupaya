@@ -242,17 +242,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-
       - name: Generate CycloneDX SBOM
-        working-directory: backend
         run: |
-          npm ci
-          npm sbom --package-lock-only --sbom-format cyclonedx --json > ../backend-sbom.json
-          test -s ../backend-sbom.json
+          docker run --rm -v "$PWD":/workspace anchore/syft:latest \
+            dir:/workspace/backend \
+            -o cyclonedx-json=/workspace/backend-sbom.json
+          test -s backend-sbom.json
 
       - name: Upload SBOM artifact
         uses: actions/upload-artifact@v4
