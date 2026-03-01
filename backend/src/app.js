@@ -23,6 +23,7 @@ const FeatureFlagsService = require('./services/FeatureFlagsService');
 const DeploymentMetricsService = require('./services/DeploymentMetricsService');
 const featureFlagsMiddleware = require('./middleware/featureFlags');
 const deploymentMetricsRoutes = require('./routes/deploymentMetrics');
+const db = require('./config/database');
 require('dotenv').config();
 
 const app = express();
@@ -30,6 +31,32 @@ const app = express();
 // Initialize feature flags and metrics services (if database is available)
 let featureFlagsService = null;
 let deploymentMetricsService = null;
+
+const createInMemoryCacheClient = () => {
+  const store = new Map();
+
+  return {
+    async get(key) {
+      return store.has(key) ? store.get(key) : null;
+    },
+    async set(key, value, mode, ttlSeconds) {
+      store.set(key, value);
+      if (mode === 'EX' && Number.isFinite(ttlSeconds) && ttlSeconds > 0) {
+        setTimeout(() => store.delete(key), ttlSeconds * 1000).unref?.();
+      }
+      return 'OK';
+    },
+    async del(...keys) {
+      let deleted = 0;
+      keys.flat().forEach((key) => {
+        if (store.delete(key)) {
+          deleted += 1;
+        }
+      });
+      return deleted;
+    }
+  };
+};
 
 // Feature Flags and Metrics Initialization
 const initializeDeploymentServices = async (db, redis) => {
@@ -60,6 +87,19 @@ const initializeDeploymentServices = async (db, redis) => {
     return { featureFlagsService: null, deploymentMetricsService: null };
   }
 };
+
+(() => {
+  try {
+    const cacheClient = createInMemoryCacheClient();
+    featureFlagsService = new FeatureFlagsService(db, cacheClient);
+    deploymentMetricsService = new DeploymentMetricsService(cacheClient, featureFlagsService);
+    logger.info('Feature Flags and Deployment Metrics services initialized (in-memory cache)');
+  } catch (error) {
+    logger.error('Failed to initialize deployment services:', error);
+    featureFlagsService = null;
+    deploymentMetricsService = null;
+  }
+})();
 
 app.set('deploymentServices', { featureFlagsService, deploymentMetricsService });
 
@@ -140,7 +180,7 @@ if (featureFlagsService && deploymentMetricsService) {
   app.use(featureFlagsMiddleware(featureFlagsService, deploymentMetricsService));
   
   // Admin Deployment Metrics Endpoints
-  app.use('/api/admin/deployment', deploymentMetricsRoutes(featureFlagsService, deploymentMetricsService));
+  app.use('/api/admin/deployment', authMiddleware, deploymentMetricsRoutes(featureFlagsService, deploymentMetricsService));
 }
 
 // Health Check - Enhanced with deployment metrics

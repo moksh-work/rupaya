@@ -3,6 +3,8 @@ CREATE TABLE users (
     user_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email VARCHAR(255) UNIQUE NOT NULL,
     email_verified BOOLEAN DEFAULT FALSE,
+    phone_number VARCHAR(20) UNIQUE,
+    phone_verified BOOLEAN DEFAULT FALSE,
     password_hash VARCHAR(255),
     name VARCHAR(255),
     country_code VARCHAR(2) DEFAULT 'IN',
@@ -26,6 +28,7 @@ CREATE TABLE users (
 );
 
 CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_users_phone ON users(phone_number);
 CREATE INDEX idx_users_created_at ON users(created_at);
 CREATE INDEX idx_users_status ON users(account_status);
 
@@ -198,6 +201,18 @@ CREATE TABLE notifications (
 
 CREATE INDEX idx_notifications_user_id ON notifications(user_id);
 CREATE INDEX idx_notifications_created_at ON notifications(created_at DESC);
+
+-- Revoked Tokens Table
+CREATE TABLE revoked_tokens (
+    token_id UUID PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    token_type VARCHAR(20) NOT NULL DEFAULT 'refresh',
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX idx_revoked_tokens_user_id ON revoked_tokens(user_id);
+CREATE INDEX idx_revoked_tokens_expires_at ON revoked_tokens(expires_at);
 
 -- Audit Log Table
 CREATE TABLE audit_log (
