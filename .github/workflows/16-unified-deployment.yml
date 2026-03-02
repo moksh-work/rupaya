@@ -158,9 +158,6 @@ jobs:
                 if [[ -z "$ROLE_ARN" ]]; then
                   ROLE_ARN="${{ vars.AWS_OIDC_ROLE_ARN_DEV }}"
                 fi
-                if [[ -z "$ROLE_ARN" ]]; then
-                  ROLE_ARN="arn:aws:iam::368613568221:role/rupaya-github-oidc-dev"
-                fi
                 ;;
               staging)
                 ROLE_ARN="${{ secrets.AWS_OIDC_ROLE_ARN_STAGING }}"
@@ -183,6 +180,10 @@ jobs:
 
           if [[ "$ROLE_ARN" == AWS_OIDC_ROLE_ARN_*=* ]]; then
             ROLE_ARN="${ROLE_ARN#*=}"
+          fi
+
+          if [[ "$ROLE_ARN" =~ (arn:aws[a-zA-Z-]*:iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_/-]+) ]]; then
+            ROLE_ARN="${BASH_REMATCH[1]}"
           fi
 
           if [[ "$ENVIRONMENT" == "dev" && "$ROLE_ARN" != arn:aws:iam::*:role/* && -n "$DEV_ACCOUNT_ID" ]]; then
@@ -258,9 +259,6 @@ jobs:
                 if [[ -z "$ROLE_ARN" ]]; then
                   ROLE_ARN="${{ vars.AWS_OIDC_ROLE_ARN_DEV }}"
                 fi
-                if [[ -z "$ROLE_ARN" ]]; then
-                  ROLE_ARN="arn:aws:iam::368613568221:role/rupaya-github-oidc-dev"
-                fi
                 ;;
               staging)
                 ROLE_ARN="${{ secrets.AWS_OIDC_ROLE_ARN_STAGING }}"
@@ -283,6 +281,10 @@ jobs:
 
           if [[ "$ROLE_ARN" == AWS_OIDC_ROLE_ARN_*=* ]]; then
             ROLE_ARN="${ROLE_ARN#*=}"
+          fi
+
+          if [[ "$ROLE_ARN" =~ (arn:aws[a-zA-Z-]*:iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_/-]+) ]]; then
+            ROLE_ARN="${BASH_REMATCH[1]}"
           fi
 
           if [[ "$ENVIRONMENT" == "dev" && "$ROLE_ARN" != arn:aws:iam::*:role/* && -n "$DEV_ACCOUNT_ID" ]]; then
