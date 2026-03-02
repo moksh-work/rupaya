@@ -133,8 +133,6 @@ jobs:
     needs: [determine-environment, prerequisite-check, validate]
     if: needs.determine-environment.outputs.deploy == 'true' && needs.prerequisite-check.outputs.ready == 'true'
     environment: ${{ needs.determine-environment.outputs.environment }}
-    outputs:
-      image_uri: ${{ steps.image.outputs.image_uri }}
     env:
       ENVIRONMENT: ${{ needs.determine-environment.outputs.environment }}
       IMAGE_TAG: ${{ needs.determine-environment.outputs.image_tag }}
@@ -222,10 +220,6 @@ jobs:
           docker push "$IMAGE_LATEST"
           echo "IMAGE=$IMAGE" >> $GITHUB_ENV
 
-      - name: Export image uri
-        id: image
-        run: echo "image_uri=$IMAGE" >> $GITHUB_OUTPUT
-
   terraform-apply:
     name: Terraform Apply
     runs-on: ubuntu-latest
@@ -234,6 +228,7 @@ jobs:
     environment: ${{ needs.determine-environment.outputs.environment }}
     env:
       ENVIRONMENT: ${{ needs.determine-environment.outputs.environment }}
+      IMAGE_TAG: ${{ needs.determine-environment.outputs.image_tag }}
     steps:
       - uses: actions/checkout@v4
 
@@ -303,12 +298,14 @@ jobs:
         uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: 1.6.6
+          terraform_wrapper: false
 
       - name: Terraform init/validate/apply
         run: |
           cd "infra/aws/environments/$ENVIRONMENT"
 
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          IMAGE_URI="${ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/rupaya-backend:${IMAGE_TAG}"
           TFSTATE_BUCKET="rupaya-terraform-state-${ACCOUNT_ID}"
           TFSTATE_DDB_TABLE="rupaya-terraform-lock-${ACCOUNT_ID}"
 
@@ -396,7 +393,7 @@ jobs:
           fi
 
           terraform validate
-          terraform apply -auto-approve -var="container_image=${{ needs.build-and-push.outputs.image_uri }}"
+          terraform apply -auto-approve -var="container_image=${IMAGE_URI}"
 
   deploy-summary:
     name: Deployment Summary
