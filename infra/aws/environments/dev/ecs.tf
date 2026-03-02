@@ -105,10 +105,87 @@ resource "aws_lb_target_group" "rupaya_backend_dev" {
   }
 }
 
-resource "aws_lb_listener" "rupaya_backend_dev" {
+locals {
+  create_acm_for_dev = var.create_acm_certificate && var.domain_name != "" && var.route53_zone_id != ""
+  effective_acm_certificate_arn = var.acm_certificate_arn != "" ? var.acm_certificate_arn : (
+    local.create_acm_for_dev ? aws_acm_certificate_validation.rupaya_dev[0].certificate_arn : ""
+  )
+  https_enabled = local.effective_acm_certificate_arn != ""
+}
+
+resource "aws_acm_certificate" "rupaya_dev" {
+  count             = local.create_acm_for_dev ? 1 : 0
+  domain_name       = var.domain_name
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = {
+    Name = "rupaya-backend-dev-acm"
+  }
+}
+
+resource "aws_route53_record" "rupaya_dev_cert_validation" {
+  for_each = local.create_acm_for_dev ? {
+    for dvo in aws_acm_certificate.rupaya_dev[0].domain_validation_options : dvo.domain_name => {
+      name   = dvo.resource_record_name
+      record = dvo.resource_record_value
+      type   = dvo.resource_record_type
+    }
+  } : {}
+
+  allow_overwrite = true
+  zone_id         = var.route53_zone_id
+  name            = each.value.name
+  type            = each.value.type
+  ttl             = 60
+  records         = [each.value.record]
+}
+
+resource "aws_acm_certificate_validation" "rupaya_dev" {
+  count                   = local.create_acm_for_dev ? 1 : 0
+  certificate_arn         = aws_acm_certificate.rupaya_dev[0].arn
+  validation_record_fqdns = [for record in aws_route53_record.rupaya_dev_cert_validation : record.fqdn]
+}
+
+resource "aws_lb_listener" "rupaya_backend_dev_http_forward" {
+  count             = local.https_enabled ? 0 : 1
   load_balancer_arn = aws_lb.rupaya_backend_dev.arn
   port              = 80
   protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.rupaya_backend_dev.arn
+  }
+}
+
+resource "aws_lb_listener" "rupaya_backend_dev_http_redirect" {
+  count             = local.https_enabled ? 1 : 0
+  load_balancer_arn = aws_lb.rupaya_backend_dev.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type = "redirect"
+
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
+  }
+}
+
+resource "aws_lb_listener" "rupaya_backend_dev_https" {
+  count             = local.https_enabled ? 1 : 0
+  load_balancer_arn = aws_lb.rupaya_backend_dev.arn
+  port              = 443
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+  certificate_arn   = local.effective_acm_certificate_arn
 
   default_action {
     type             = "forward"
@@ -137,7 +214,9 @@ resource "aws_ecs_service" "rupaya_backend_dev" {
   }
 
   depends_on = [
-    aws_lb_listener.rupaya_backend_dev,
+    aws_lb_listener.rupaya_backend_dev_http_forward,
+    aws_lb_listener.rupaya_backend_dev_http_redirect,
+    aws_lb_listener.rupaya_backend_dev_https,
     aws_iam_role_policy.ecs_task_execution_logs_policy
   ]
 
@@ -209,4 +288,14 @@ output "ecs_service_arn" {
 output "target_group_arn" {
   value       = aws_lb_target_group.rupaya_backend_dev.arn
   description = "Target group ARN"
+}
+
+output "acm_certificate_arn_effective" {
+  value       = local.effective_acm_certificate_arn
+  description = "Effective ACM certificate ARN used by HTTPS listener"
+}
+
+output "api_base_url" {
+  value       = local.https_enabled ? "https://${aws_lb.rupaya_backend_dev.dns_name}" : "http://${aws_lb.rupaya_backend_dev.dns_name}"
+  description = "Base URL for API access"
 }

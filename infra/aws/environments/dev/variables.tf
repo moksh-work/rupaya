@@ -112,6 +112,31 @@ variable "container_port" {
   default     = 3000
 }
 
+# ========== HTTPS / ACM CONFIGURATION ==========
+variable "acm_certificate_arn" {
+  description = "Existing ACM certificate ARN to attach to ALB HTTPS listener"
+  type        = string
+  default     = ""
+}
+
+variable "create_acm_certificate" {
+  description = "Whether to create ACM certificate via Route53 validation"
+  type        = bool
+  default     = false
+}
+
+variable "domain_name" {
+  description = "Domain name for ACM certificate (required when create_acm_certificate=true)"
+  type        = string
+  default     = ""
+}
+
+variable "route53_zone_id" {
+  description = "Route53 hosted zone ID for DNS validation records"
+  type        = string
+  default     = ""
+}
+
 # ========== ENVIRONMENT VARIABLES ==========
 variable "environment_variables" {
   description = "Environment variables for ECS task"
