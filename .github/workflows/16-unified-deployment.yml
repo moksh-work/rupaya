@@ -319,13 +319,17 @@ jobs:
             aws s3api create-bucket --bucket "$TFSTATE_BUCKET" --region us-east-1
           fi
 
-          aws s3api put-bucket-versioning \
+          if ! aws s3api put-bucket-versioning \
             --bucket "$TFSTATE_BUCKET" \
-            --versioning-configuration Status=Enabled
+            --versioning-configuration Status=Enabled; then
+            echo "Warning: unable to enable bucket versioning on $TFSTATE_BUCKET (continuing)"
+          fi
 
-          aws s3api put-bucket-encryption \
+          if ! aws s3api put-bucket-encryption \
             --bucket "$TFSTATE_BUCKET" \
-            --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
+            --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'; then
+            echo "Warning: unable to set bucket encryption on $TFSTATE_BUCKET (continuing)"
+          fi
 
           if ! aws dynamodb describe-table --table-name "$TFSTATE_DDB_TABLE" --region us-east-1 >/dev/null 2>&1; then
             aws dynamodb create-table \
