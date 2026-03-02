@@ -29,6 +29,7 @@
     "docker:logs": "docker-compose -f docker-compose.dev.yml logs -f backend"
   },
   "dependencies": {
+    "@json2csv/plainjs": "^7.0.6",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
@@ -39,16 +40,18 @@
     "hibp": "^15.2.1",
     "joi": "^18.0.2",
     "joi-password-complexity": "^5.2.0",
-    "json2csv": "^5.0.7",
     "jsonwebtoken": "^9.0.3",
     "knex": "^3.1.0",
-    "multer": "^2.0.2",
+    "multer": "^2.1.0",
     "pg": "^8.18.0",
     "qrcode": "^1.5.4",
     "redis": "^5.11.0",
     "speakeasy": "^2.0.0",
     "uuid": "^11.1.0",
     "winston": "^3.19.0"
+  },
+  "engines": {
+    "node": ">=20.19.0"
   },
   "devDependencies": {
     "jest": "^30.2.0",

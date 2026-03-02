@@ -1,5 +1,5 @@
 const Expense = require('../models/Expense');
-const { parse } = require('json2csv');
+const { Parser } = require('@json2csv/plainjs');
 
 class ExpenseService {
   async createExpense(userId, data) {
@@ -107,7 +107,8 @@ class ExpenseService {
         notes: e.notes || ''
       }));
 
-      return parse(data, { fields });
+      const parser = new Parser({ fields });
+      return parser.parse(data);
     }
 
     throw new Error('Unsupported export format');

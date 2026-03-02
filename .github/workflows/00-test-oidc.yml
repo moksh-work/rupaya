@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        environment: ${{ github.event_name == 'workflow_dispatch' && fromJSON(format('["{0}"]', github.event.inputs.environment)) || fromJSON('["development"]') }}
+        environment: ${{ github.ref_name == 'main' && fromJSON('["production"]') || (github.event_name == 'workflow_dispatch' && fromJSON(format('["{0}"]', github.event.inputs.environment)) || fromJSON('["development"]')) }}
       fail-fast: false
     steps:
       - name: Check GitHub Secret Exists
