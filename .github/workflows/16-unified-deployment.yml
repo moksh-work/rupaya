@@ -189,7 +189,10 @@ jobs:
           if [[ "$ENVIRONMENT" == "dev" && "$ROLE_ARN" != arn:aws:iam::*:role/* && -n "$DEV_ACCOUNT_ID" ]]; then
             ROLE_NAME="$ROLE_ARN"
             ROLE_NAME="${ROLE_NAME#role/}"
-            if [[ -z "$ROLE_NAME" ]]; then
+            if [[ "$ROLE_NAME" == arn:* ]]; then
+              ROLE_NAME="${ROLE_NAME##*/}"
+            fi
+            if [[ -z "$ROLE_NAME" || "$ROLE_NAME" == *:* || "$ROLE_NAME" == *=* || "$ROLE_NAME" == *" "* ]]; then
               ROLE_NAME="$DEFAULT_DEV_ROLE_NAME"
             fi
             ROLE_ARN="arn:aws:iam::${DEV_ACCOUNT_ID}:role/${ROLE_NAME}"
@@ -290,7 +293,10 @@ jobs:
           if [[ "$ENVIRONMENT" == "dev" && "$ROLE_ARN" != arn:aws:iam::*:role/* && -n "$DEV_ACCOUNT_ID" ]]; then
             ROLE_NAME="$ROLE_ARN"
             ROLE_NAME="${ROLE_NAME#role/}"
-            if [[ -z "$ROLE_NAME" ]]; then
+            if [[ "$ROLE_NAME" == arn:* ]]; then
+              ROLE_NAME="${ROLE_NAME##*/}"
+            fi
+            if [[ -z "$ROLE_NAME" || "$ROLE_NAME" == *:* || "$ROLE_NAME" == *=* || "$ROLE_NAME" == *" "* ]]; then
               ROLE_NAME="$DEFAULT_DEV_ROLE_NAME"
             fi
             ROLE_ARN="arn:aws:iam::${DEV_ACCOUNT_ID}:role/${ROLE_NAME}"
