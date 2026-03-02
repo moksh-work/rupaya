@@ -393,7 +393,19 @@ jobs:
           fi
 
           terraform validate
-          terraform apply -auto-approve -var="container_image=${IMAGE_URI}"
+          TF_APPLY_ARGS=(
+            -auto-approve
+            -var="container_image=${IMAGE_URI}"
+          )
+
+          if [[ "$ENVIRONMENT" == "dev" ]]; then
+            TF_APPLY_ARGS+=(
+              -var="ecs_desired_count=2"
+              -var="ecs_min_count=2"
+            )
+          fi
+
+          terraform apply "${TF_APPLY_ARGS[@]}"
 
   deploy-summary:
     name: Deployment Summary
