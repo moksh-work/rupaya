@@ -136,6 +136,9 @@ jobs:
     env:
       ENVIRONMENT: ${{ needs.determine-environment.outputs.environment }}
       IMAGE_TAG: ${{ needs.determine-environment.outputs.image_tag }}
+      ACM_CERTIFICATE_ARN_DEV: ${{ vars.ACM_CERTIFICATE_ARN_DEV }}
+      DOMAIN_NAME_DEV: ${{ vars.DOMAIN_NAME_DEV }}
+      ROUTE53_ZONE_ID_DEV: ${{ vars.ROUTE53_ZONE_ID_DEV }}
     steps:
       - uses: actions/checkout@v4
 
@@ -399,10 +402,26 @@ jobs:
           )
 
           if [[ "$ENVIRONMENT" == "dev" ]]; then
+            ACM_CERT_ARN="$(echo "${ACM_CERTIFICATE_ARN_DEV}" | tr -d '\r' | tr -d '\n' | xargs)"
+            DOMAIN_NAME="$(echo "${DOMAIN_NAME_DEV}" | tr -d '\r' | tr -d '\n' | xargs)"
+            ROUTE53_ZONE_ID="$(echo "${ROUTE53_ZONE_ID_DEV}" | tr -d '\r' | tr -d '\n' | xargs)"
+
             TF_APPLY_ARGS+=(
               -var="ecs_desired_count=2"
               -var="ecs_min_count=2"
             )
+
+            if [[ -n "$ACM_CERT_ARN" ]]; then
+              TF_APPLY_ARGS+=(
+                -var="acm_certificate_arn=${ACM_CERT_ARN}"
+              )
+            elif [[ -n "$DOMAIN_NAME" && -n "$ROUTE53_ZONE_ID" ]]; then
+              TF_APPLY_ARGS+=(
+                -var="create_acm_certificate=true"
+                -var="domain_name=${DOMAIN_NAME}"
+                -var="route53_zone_id=${ROUTE53_ZONE_ID}"
+              )
+            fi
           fi
 
           terraform apply "${TF_APPLY_ARGS[@]}"

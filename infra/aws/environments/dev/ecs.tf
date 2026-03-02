@@ -150,31 +150,29 @@ resource "aws_acm_certificate_validation" "rupaya_dev" {
   validation_record_fqdns = [for record in aws_route53_record.rupaya_dev_cert_validation : record.fqdn]
 }
 
-resource "aws_lb_listener" "rupaya_backend_dev_http_forward" {
-  count             = local.https_enabled ? 0 : 1
+resource "aws_lb_listener" "rupaya_backend_dev" {
   load_balancer_arn = aws_lb.rupaya_backend_dev.arn
   port              = 80
   protocol          = "HTTP"
 
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.rupaya_backend_dev.arn
+  dynamic "default_action" {
+    for_each = local.https_enabled ? [1] : []
+    content {
+      type = "redirect"
+
+      redirect {
+        port        = "443"
+        protocol    = "HTTPS"
+        status_code = "HTTP_301"
+      }
+    }
   }
-}
 
-resource "aws_lb_listener" "rupaya_backend_dev_http_redirect" {
-  count             = local.https_enabled ? 1 : 0
-  load_balancer_arn = aws_lb.rupaya_backend_dev.arn
-  port              = 80
-  protocol          = "HTTP"
-
-  default_action {
-    type = "redirect"
-
-    redirect {
-      port        = "443"
-      protocol    = "HTTPS"
-      status_code = "HTTP_301"
+  dynamic "default_action" {
+    for_each = local.https_enabled ? [] : [1]
+    content {
+      type             = "forward"
+      target_group_arn = aws_lb_target_group.rupaya_backend_dev.arn
     }
   }
 }
@@ -214,8 +212,7 @@ resource "aws_ecs_service" "rupaya_backend_dev" {
   }
 
   depends_on = [
-    aws_lb_listener.rupaya_backend_dev_http_forward,
-    aws_lb_listener.rupaya_backend_dev_http_redirect,
+    aws_lb_listener.rupaya_backend_dev,
     aws_lb_listener.rupaya_backend_dev_https,
     aws_iam_role_policy.ecs_task_execution_logs_policy
   ]
