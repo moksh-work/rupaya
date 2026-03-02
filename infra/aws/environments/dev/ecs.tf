@@ -106,11 +106,24 @@ resource "aws_lb_target_group" "rupaya_backend_dev" {
 }
 
 locals {
-  create_acm_for_dev = var.create_acm_certificate && var.domain_name != "" && var.route53_zone_id != ""
+  create_route53_zone_for_dev = var.create_route53_zone && var.domain_name != ""
+  effective_route53_zone_id = var.route53_zone_id != "" ? var.route53_zone_id : (
+    local.create_route53_zone_for_dev ? aws_route53_zone.rupaya_dev[0].zone_id : ""
+  )
+  create_acm_for_dev = var.create_acm_certificate && var.domain_name != "" && local.effective_route53_zone_id != ""
   effective_acm_certificate_arn = var.acm_certificate_arn != "" ? var.acm_certificate_arn : (
     local.create_acm_for_dev ? aws_acm_certificate_validation.rupaya_dev[0].certificate_arn : ""
   )
   https_enabled = local.effective_acm_certificate_arn != ""
+}
+
+resource "aws_route53_zone" "rupaya_dev" {
+  count = local.create_route53_zone_for_dev ? 1 : 0
+  name  = var.domain_name
+
+  tags = {
+    Name = "rupaya-dev-zone"
+  }
 }
 
 resource "aws_acm_certificate" "rupaya_dev" {
@@ -137,7 +150,7 @@ resource "aws_route53_record" "rupaya_dev_cert_validation" {
   } : {}
 
   allow_overwrite = true
-  zone_id         = var.route53_zone_id
+  zone_id         = local.effective_route53_zone_id
   name            = each.value.name
   type            = each.value.type
   ttl             = 60
@@ -295,4 +308,9 @@ output "acm_certificate_arn_effective" {
 output "api_base_url" {
   value       = local.https_enabled ? "https://${aws_lb.rupaya_backend_dev.dns_name}" : "http://${aws_lb.rupaya_backend_dev.dns_name}"
   description = "Base URL for API access"
+}
+
+output "route53_name_servers" {
+  value       = local.create_route53_zone_for_dev ? aws_route53_zone.rupaya_dev[0].name_servers : []
+  description = "Name servers to configure at your domain registrar when create_route53_zone is enabled"
 }

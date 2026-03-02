@@ -125,6 +125,12 @@ variable "create_acm_certificate" {
   default     = false
 }
 
+variable "create_route53_zone" {
+  description = "Whether to create a new public Route53 hosted zone for domain_name"
+  type        = bool
+  default     = false
+}
+
 variable "domain_name" {
   description = "Domain name for ACM certificate (required when create_acm_certificate=true)"
   type        = string
