@@ -32,12 +32,14 @@ class DeploymentMetricsService extends EventEmitter {
       () => this.aggregateMetrics(),
       this.aggregationInterval
     );
+    this.aggregationTimer.unref?.();
 
     // Cleanup old metrics periodically
     this.cleanupTimer = setInterval(
       () => this.cleanupOldMetrics(),
       5 * 60 * 1000 // Every 5 minutes
     );
+    this.cleanupTimer.unref?.();
   }
 
   /**

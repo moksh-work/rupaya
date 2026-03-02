@@ -195,17 +195,19 @@ if echo "$HEALTH" | grep -q "OK"; then
   print_status "GET /health: OK"
 else
   print_error "GET /health failed"
+  echo "Response: $HEALTH"
+  exit 1
 fi
 
 print_info "Testing signup endpoint..."
+TS=$(date +%s)
+RAND=${RANDOM:-0}
+TEST_EMAIL="docker.test.${TS}.${RAND}@example.com"
+TEST_DEVICE_ID="docker-test-${TS}-${RAND}"
+
 SIGNUP=$(curl -s -X POST http://localhost:3000/api/v1/auth/signup \
   -H "Content-Type: application/json" \
-  -d '{
-    "email": "test@example.com",
-    "password": "SecurePass123!",
-    "deviceId": "docker-test",
-    "deviceName": "Docker Test Device"
-  }')
+  -d "{\"email\":\"${TEST_EMAIL}\",\"password\":\"SecurePass123A\",\"deviceId\":\"${TEST_DEVICE_ID}\",\"deviceName\":\"Docker Test Device\"}")
 
 if echo "$SIGNUP" | grep -q "accessToken"; then
   print_status "POST /api/v1/auth/signup: Created"
@@ -214,6 +216,7 @@ if echo "$SIGNUP" | grep -q "accessToken"; then
 else
   print_error "POST /api/v1/auth/signup failed"
   echo "Response: $SIGNUP"
+  exit 1
 fi
 
 echo ""
@@ -226,7 +229,13 @@ echo ""
 
 # Test 12: Resource usage
 echo -e "${YELLOW}Test 12: Resource Usage${NC}"
-docker stats --no-stream --format "table {{.Container}}\t{{.MemUsage}}\t{{.CPUPerc}}" | grep rupaya
+STATS=$(docker stats --no-stream --format "table {{.Container}}\t{{.MemUsage}}\t{{.CPUPerc}}")
+echo "$STATS"
+if echo "$STATS" | grep -qi "rupaya"; then
+  print_status "Resource usage captured"
+else
+  print_warning "No rupaya containers matched in docker stats output"
+fi
 echo ""
 
 # Summary

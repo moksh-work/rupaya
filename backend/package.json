@@ -29,7 +29,6 @@
     "docker:logs": "docker-compose -f docker-compose.dev.yml logs -f backend"
   },
   "dependencies": {
-    "aws-sdk": "^2.1693.0",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
@@ -53,7 +52,12 @@
   },
   "devDependencies": {
     "jest": "^30.2.0",
-    "nodemon": "^3.1.11",
+    "nodemon": "^3.1.14",
     "supertest": "^7.2.2"
+  },
+  "overrides": {
+    "glob": {
+      "minimatch": "9.0.9"
+    }
   }
 }

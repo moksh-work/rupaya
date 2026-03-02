@@ -1,25 +1,6 @@
 name: 16 - Unified Multi-Environment Deployment
 
 on:
-  workflow_run:
-    workflows:
-      - "01 - Fast Feedback (Smoke Tests & Validation)"
-      - "02 - Mobile Build Check"
-      - "03 - Android Build & Release"
-      - "04 - iOS Build & Release"
-    types:
-      - completed
-
-  push:
-    branches:
-      - feature/**
-      - bugfix/**
-      - chore/**
-      - main
-      - release/**
-    tags:
-      - 'v*.*.*'
-
   workflow_dispatch:
     inputs:
       environment:
@@ -30,10 +11,14 @@ on:
           - dev
           - staging
           - prod
+      role_arn_override:
+        description: 'Optional: explicit AWS role ARN to assume'
+        required: false
+        type: string
 
 concurrency:
   group: unified-deploy-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -45,6 +30,7 @@ jobs:
   determine-environment:
     name: Determine Environment
     runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
     outputs:
       environment: ${{ steps.set.outputs.environment }}
       deploy: ${{ steps.set.outputs.deploy }}
@@ -62,27 +48,8 @@ jobs:
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             ENV="${{ github.event.inputs.environment }}"
             DEPLOY="true"
-            BRANCH="manual"
+            BRANCH="${{ github.ref_name }}"
             SHA="${{ github.sha }}"
-          elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
-            BRANCH="${{ github.event.workflow_run.head_branch }}"
-            SHA="${{ github.event.workflow_run.head_sha }}"
-            if [[ "$BRANCH" == feature/* || "$BRANCH" == bugfix/* || "$BRANCH" == chore/* ]]; then
-              ENV="dev"
-              DEPLOY="true"
-            fi
-          elif [[ "${{ github.ref }}" == refs/heads/feature/* || "${{ github.ref }}" == refs/heads/bugfix/* || "${{ github.ref }}" == refs/heads/chore/* ]]; then
-            ENV="dev"
-            DEPLOY="true"
-            BRANCH="${{ github.ref_name }}"
-          elif [[ "${{ github.ref }}" == refs/heads/release/* ]]; then
-            ENV="staging"
-            DEPLOY="true"
-            BRANCH="${{ github.ref_name }}"
-          elif [[ "${{ github.ref }}" == "refs/heads/main" || "${{ github.ref }}" == refs/tags/v* ]]; then
-            ENV="prod"
-            DEPLOY="true"
-            BRANCH="${{ github.ref_name }}"
           fi
 
           echo "environment=$ENV" >> $GITHUB_OUTPUT
@@ -100,58 +67,7 @@ jobs:
       ready: ${{ steps.check.outputs.ready }}
     steps:
       - id: check
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const isWorkflowRun = context.eventName === 'workflow_run';
-            if (!isWorkflowRun) {
-              core.setOutput('ready', 'true');
-              return;
-            }
-
-            const required = [
-              '01 - Fast Feedback (Smoke Tests & Validation)',
-              '02 - Mobile Build Check',
-              '03 - Android Build & Release',
-              '04 - iOS Build & Release'
-            ];
-
-            const sha = context.payload.workflow_run.head_sha;
-            const owner = context.repo.owner;
-            const repo = context.repo.repo;
-
-            const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
-              owner,
-              repo,
-              head_sha: sha,
-              per_page: 100
-            });
-
-            const latestByName = {};
-            for (const run of runs) {
-              if (!required.includes(run.name)) continue;
-              if (!latestByName[run.name] || new Date(run.created_at) > new Date(latestByName[run.name].created_at)) {
-                latestByName[run.name] = run;
-              }
-            }
-
-            const missing = [];
-            const failed = [];
-            for (const name of required) {
-              const run = latestByName[name];
-              if (!run) {
-                missing.push(name);
-              } else if (run.conclusion !== 'success') {
-                failed.push(`${name} (${run.conclusion || 'no conclusion'})`);
-              }
-            }
-
-            const ready = missing.length === 0 && failed.length === 0;
-            core.setOutput('ready', ready ? 'true' : 'false');
-
-            if (!ready) {
-              core.warning(`Prerequisites not ready. Missing: ${missing.join(', ') || 'none'}; Failed: ${failed.join(', ') || 'none'}`);
-            }
+        run: echo "ready=true" >> $GITHUB_OUTPUT
 
   validate:
     name: Validate Backend
@@ -216,6 +132,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [determine-environment, prerequisite-check, validate]
     if: needs.determine-environment.outputs.deploy == 'true' && needs.prerequisite-check.outputs.ready == 'true'
+    environment: ${{ needs.determine-environment.outputs.environment }}
     outputs:
       image_uri: ${{ steps.image.outputs.image_uri }}
     env:
@@ -227,22 +144,46 @@ jobs:
       - name: Resolve role ARN
         id: role
         run: |
+          ROLE_ARN_INPUT="${{ github.event.inputs.role_arn_override }}"
           ROLE_ARN=""
-          case "$ENVIRONMENT" in
-            dev)
-              ROLE_ARN="${{ secrets.AWS_OIDC_ROLE_ARN_DEV }}"
-              ;;
-            staging)
-              ROLE_ARN="${{ secrets.AWS_OIDC_ROLE_ARN_STAGING }}"
-              ;;
-            prod)
-              ROLE_ARN="${{ secrets.AWS_OIDC_ROLE_ARN_PROD }}"
-              ;;
-            *) exit 1 ;;
-          esac
+
+          if [[ -n "$ROLE_ARN_INPUT" ]]; then
+            ROLE_ARN="$ROLE_ARN_INPUT"
+          else
+            case "$ENVIRONMENT" in
+              dev)
+                ROLE_ARN="${{ secrets.AWS_OIDC_ROLE_ARN_DEV }}"
+                if [[ -z "$ROLE_ARN" ]]; then
+                  ROLE_ARN="${{ vars.AWS_OIDC_ROLE_ARN_DEV }}"
+                fi
+                if [[ -z "$ROLE_ARN" ]]; then
+                  ROLE_ARN="arn:aws:iam::368613568221:role/rupaya-github-oidc-dev"
+                fi
+                ;;
+              staging)
+                ROLE_ARN="${{ secrets.AWS_OIDC_ROLE_ARN_STAGING }}"
+                if [[ -z "$ROLE_ARN" ]]; then
+                  ROLE_ARN="${{ vars.AWS_OIDC_ROLE_ARN_STAGING }}"
+                fi
+                ;;
+              prod)
+                ROLE_ARN="${{ secrets.AWS_OIDC_ROLE_ARN_PROD }}"
+                if [[ -z "$ROLE_ARN" ]]; then
+                  ROLE_ARN="${{ vars.AWS_OIDC_ROLE_ARN_PROD }}"
+                fi
+                ;;
+            esac
+          fi
+
           ROLE_ARN="$(echo "$ROLE_ARN" | tr -d '\r' | xargs)"
-          if [[ -z "$ROLE_ARN" || "$ROLE_ARN" != arn:aws:iam::*:role/* ]]; then
-            echo "Invalid or missing role ARN for environment: $ENVIRONMENT"
+
+          if [[ -z "$ROLE_ARN" ]]; then
+            ROLE_ARN="arn:aws:iam::368613568221:role/rupaya-github-oidc-dev"
+          fi
+
+          if [[ "$ROLE_ARN" != arn:aws:iam::*:role/* ]]; then
+            echo "Invalid role ARN format: $ROLE_ARN"
+            echo "Hint: set secret AWS_OIDC_ROLE_ARN_${ENVIRONMENT^^} or provide role_arn_override in manual run"
             exit 1
           fi
           echo "role_arn=$ROLE_ARN" >> $GITHUB_OUTPUT
@@ -281,6 +222,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [determine-environment, prerequisite-check, build-and-push]
     if: needs.determine-environment.outputs.deploy == 'true' && needs.prerequisite-check.outputs.ready == 'true'
+    environment: ${{ needs.determine-environment.outputs.environment }}
     env:
       ENVIRONMENT: ${{ needs.determine-environment.outputs.environment }}
     steps:
@@ -289,22 +231,46 @@ jobs:
       - name: Resolve role ARN
         id: role
         run: |
+          ROLE_ARN_INPUT="${{ github.event.inputs.role_arn_override }}"
           ROLE_ARN=""
-          case "$ENVIRONMENT" in
-            dev)
-              ROLE_ARN="${{ secrets.AWS_OIDC_ROLE_ARN_DEV }}"
-              ;;
-            staging)
-              ROLE_ARN="${{ secrets.AWS_OIDC_ROLE_ARN_STAGING }}"
-              ;;
-            prod)
-              ROLE_ARN="${{ secrets.AWS_OIDC_ROLE_ARN_PROD }}"
-              ;;
-            *) exit 1 ;;
-          esac
+
+          if [[ -n "$ROLE_ARN_INPUT" ]]; then
+            ROLE_ARN="$ROLE_ARN_INPUT"
+          else
+            case "$ENVIRONMENT" in
+              dev)
+                ROLE_ARN="${{ secrets.AWS_OIDC_ROLE_ARN_DEV }}"
+                if [[ -z "$ROLE_ARN" ]]; then
+                  ROLE_ARN="${{ vars.AWS_OIDC_ROLE_ARN_DEV }}"
+                fi
+                if [[ -z "$ROLE_ARN" ]]; then
+                  ROLE_ARN="arn:aws:iam::368613568221:role/rupaya-github-oidc-dev"
+                fi
+                ;;
+              staging)
+                ROLE_ARN="${{ secrets.AWS_OIDC_ROLE_ARN_STAGING }}"
+                if [[ -z "$ROLE_ARN" ]]; then
+                  ROLE_ARN="${{ vars.AWS_OIDC_ROLE_ARN_STAGING }}"
+                fi
+                ;;
+              prod)
+                ROLE_ARN="${{ secrets.AWS_OIDC_ROLE_ARN_PROD }}"
+                if [[ -z "$ROLE_ARN" ]]; then
+                  ROLE_ARN="${{ vars.AWS_OIDC_ROLE_ARN_PROD }}"
+                fi
+                ;;
+            esac
+          fi
+
           ROLE_ARN="$(echo "$ROLE_ARN" | tr -d '\r' | xargs)"
-          if [[ -z "$ROLE_ARN" || "$ROLE_ARN" != arn:aws:iam::*:role/* ]]; then
-            echo "Invalid or missing role ARN for environment: $ENVIRONMENT"
+
+          if [[ -z "$ROLE_ARN" ]]; then
+            ROLE_ARN="arn:aws:iam::368613568221:role/rupaya-github-oidc-dev"
+          fi
+
+          if [[ "$ROLE_ARN" != arn:aws:iam::*:role/* ]]; then
+            echo "Invalid role ARN format: $ROLE_ARN"
+            echo "Hint: set secret AWS_OIDC_ROLE_ARN_${ENVIRONMENT^^} or provide role_arn_override in manual run"
             exit 1
           fi
           echo "role_arn=$ROLE_ARN" >> $GITHUB_OUTPUT

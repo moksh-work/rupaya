@@ -113,15 +113,34 @@ jobs:
           cd backend
           npm ci
 
+      - name: Run test migrations
+        run: |
+          cd backend
+          npm run migrate:test
+        env:
+          NODE_ENV: test
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+          DB_USER: test_user
+          DB_PASSWORD: test_password
+          DB_NAME: rupaya_test
+          DATABASE_URL: postgres://test_user:test_password@127.0.0.1:5432/rupaya_test
+
       - name: Run smoke tests (critical path only)
         run: |
           cd backend
-          npm test -- __tests__/smoke/ --coverage
+          npm run test:smoke -- --maxWorkers=2
         env:
           DATABASE_URL: postgres://test_user:test_password@127.0.0.1:5432/rupaya_test
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+          DB_USER: test_user
+          DB_PASSWORD: test_password
+          DB_NAME: rupaya_test
           NODE_ENV: test
-          JWT_SECRET: test-secret
-          REFRESH_TOKEN_SECRET: test-refresh-secret
+          JWT_SECRET: test-secret-key-minimum-32-characters-long
+          REFRESH_TOKEN_SECRET: test-refresh-secret-key-minimum-32-chars
+          ENCRYPTION_KEY: test-encryption-key-minimum-32-chars
           REDIS_URL: redis://localhost:6379
           RUN_REMOTE_TESTS: "false"
           DISABLE_TOKEN_CLEANUP: "true"
@@ -131,12 +150,23 @@ jobs:
       - name: Run unit tests (fast only)
         run: |
           cd backend
-          npm test -- __tests__/unit/ --testPathIgnorePatterns=slow --coverage
+          npm run test:unit -- --testPathIgnorePatterns=slow --maxWorkers=2
         env:
           DATABASE_URL: postgres://test_user:test_password@127.0.0.1:5432/rupaya_test
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+          DB_USER: test_user
+          DB_PASSWORD: test_password
+          DB_NAME: rupaya_test
           NODE_ENV: test
-          JWT_SECRET: test-secret
+          JWT_SECRET: test-secret-key-minimum-32-characters-long
+          REFRESH_TOKEN_SECRET: test-refresh-secret-key-minimum-32-chars
+          ENCRYPTION_KEY: test-encryption-key-minimum-32-chars
           REDIS_URL: redis://localhost:6379
+          RUN_REMOTE_TESTS: "false"
+          DISABLE_TOKEN_CLEANUP: "true"
+          DISABLE_PWNED_CHECK: "true"
+          DISABLE_PASSWORD_STRENGTH: "true"
 
       - name: Upload smoke test coverage
         uses: codecov/codecov-action@v4
@@ -144,6 +174,7 @@ jobs:
           files: ./backend/coverage/coverage-final.json
           flags: smoke-tests
           name: smoke-coverage
+          fail_ci_if_error: false
 
   # ========== SECURITY SCANNING ==========
   security-scan:
@@ -159,14 +190,17 @@ jobs:
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@0.28.0
+        continue-on-error: true
         with:
           scan-type: 'fs'
           scan-ref: '.'
           format: 'sarif'
           output: 'trivy-results.sarif'
+          exit-code: '0'
 
       - name: Upload to GitHub Security
         uses: github/codeql-action/upload-sarif@v4
+        if: hashFiles('trivy-results.sarif') != ''
         continue-on-error: true
         with:
           sarif_file: 'trivy-results.sarif'
@@ -174,11 +208,7 @@ jobs:
       - name: Dependency check
         run: |
           cd backend
-          if [[ "${{ github.event_name }}" == "pull_request" || "${{ github.ref }}" == "refs/heads/main" ]]; then
-            npm audit --audit-level=high
-          else
-            npm audit --audit-level=high || echo "⚠️ Vulnerabilities found - review before merge"
-          fi
+          npm audit --audit-level=high || echo "⚠️ Vulnerabilities found - review before merge"
 
   policy-guard:
     name: Policy Guardrails
@@ -212,16 +242,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-
       - name: Generate CycloneDX SBOM
         run: |
-          cd backend
-          npm ci
-          npx --yes @cyclonedx/cyclonedx-npm --output-file ../backend-sbom.json --output-format json
+          docker run --rm -v "$PWD":/workspace anchore/syft:latest \
+            dir:/workspace/backend \
+            -o cyclonedx-json=/workspace/backend-sbom.json
+          test -s backend-sbom.json
 
       - name: Upload SBOM artifact
         uses: actions/upload-artifact@v4

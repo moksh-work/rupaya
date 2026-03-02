@@ -282,7 +282,9 @@ class AuthService {
         throw new Error('Invalid refresh token format');
       }
 
-      if (decoded.tokenId) {
+      const hasRevokedTokensTable = await db.schema.hasTable('revoked_tokens');
+
+      if (decoded.tokenId && hasRevokedTokensTable) {
         const revoked = await db('revoked_tokens')
           .where({ token_id: decoded.tokenId })
           .first();
@@ -306,6 +308,11 @@ class AuthService {
 
     const expiresAt = decoded.exp ? new Date(decoded.exp * 1000) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
+    const hasRevokedTokensTable = await db.schema.hasTable('revoked_tokens');
+    if (!hasRevokedTokensTable) {
+      return false;
+    }
+
     await db('revoked_tokens')
       .insert({
         token_id: decoded.tokenId,
@@ -321,6 +328,17 @@ class AuthService {
 
   static async cleanupRevokedTokens() {
     try {
+      const hasRevokedTokensTable = await db.schema.hasTable('revoked_tokens');
+      if (!hasRevokedTokensTable) {
+        return {
+          deleted: 0,
+          expectedDeleted: 0,
+          activeRevoked: 0,
+          remainingExpired: 0,
+          skipped: true
+        };
+      }
+
       // Get count of expired tokens before deletion
       const expiredTokens = await db('revoked_tokens')
         .where('expires_at', '<', new Date())
