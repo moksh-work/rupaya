@@ -146,6 +146,8 @@ jobs:
         run: |
           ROLE_ARN_INPUT="${{ github.event.inputs.role_arn_override }}"
           ROLE_ARN=""
+          DEV_ACCOUNT_ID="${{ vars.AWS_ACCOUNT_ID_DEV }}"
+          DEFAULT_DEV_ROLE_NAME="rupaya-github-oidc-dev"
 
           if [[ -n "$ROLE_ARN_INPUT" ]]; then
             ROLE_ARN="$ROLE_ARN_INPUT"
@@ -175,10 +177,21 @@ jobs:
             esac
           fi
 
-          ROLE_ARN="$(echo "$ROLE_ARN" | tr -d '\r' | xargs)"
+          ROLE_ARN="$(echo "$ROLE_ARN" | tr -d '\r' | tr -d '\n' | xargs)"
+          ROLE_ARN="${ROLE_ARN#\"}"
+          ROLE_ARN="${ROLE_ARN%\"}"
 
-          if [[ -z "$ROLE_ARN" ]]; then
-            ROLE_ARN="arn:aws:iam::368613568221:role/rupaya-github-oidc-dev"
+          if [[ "$ROLE_ARN" == AWS_OIDC_ROLE_ARN_*=* ]]; then
+            ROLE_ARN="${ROLE_ARN#*=}"
+          fi
+
+          if [[ "$ENVIRONMENT" == "dev" && "$ROLE_ARN" != arn:aws:iam::*:role/* && -n "$DEV_ACCOUNT_ID" ]]; then
+            ROLE_NAME="$ROLE_ARN"
+            ROLE_NAME="${ROLE_NAME#role/}"
+            if [[ -z "$ROLE_NAME" ]]; then
+              ROLE_NAME="$DEFAULT_DEV_ROLE_NAME"
+            fi
+            ROLE_ARN="arn:aws:iam::${DEV_ACCOUNT_ID}:role/${ROLE_NAME}"
           fi
 
           if [[ "$ROLE_ARN" != arn:aws:iam::*:role/* ]]; then
@@ -233,6 +246,8 @@ jobs:
         run: |
           ROLE_ARN_INPUT="${{ github.event.inputs.role_arn_override }}"
           ROLE_ARN=""
+          DEV_ACCOUNT_ID="${{ vars.AWS_ACCOUNT_ID_DEV }}"
+          DEFAULT_DEV_ROLE_NAME="rupaya-github-oidc-dev"
 
           if [[ -n "$ROLE_ARN_INPUT" ]]; then
             ROLE_ARN="$ROLE_ARN_INPUT"
@@ -262,10 +277,21 @@ jobs:
             esac
           fi
 
-          ROLE_ARN="$(echo "$ROLE_ARN" | tr -d '\r' | xargs)"
+          ROLE_ARN="$(echo "$ROLE_ARN" | tr -d '\r' | tr -d '\n' | xargs)"
+          ROLE_ARN="${ROLE_ARN#\"}"
+          ROLE_ARN="${ROLE_ARN%\"}"
 
-          if [[ -z "$ROLE_ARN" ]]; then
-            ROLE_ARN="arn:aws:iam::368613568221:role/rupaya-github-oidc-dev"
+          if [[ "$ROLE_ARN" == AWS_OIDC_ROLE_ARN_*=* ]]; then
+            ROLE_ARN="${ROLE_ARN#*=}"
+          fi
+
+          if [[ "$ENVIRONMENT" == "dev" && "$ROLE_ARN" != arn:aws:iam::*:role/* && -n "$DEV_ACCOUNT_ID" ]]; then
+            ROLE_NAME="$ROLE_ARN"
+            ROLE_NAME="${ROLE_NAME#role/}"
+            if [[ -z "$ROLE_NAME" ]]; then
+              ROLE_NAME="$DEFAULT_DEV_ROLE_NAME"
+            fi
+            ROLE_ARN="arn:aws:iam::${DEV_ACCOUNT_ID}:role/${ROLE_NAME}"
           fi
 
           if [[ "$ROLE_ARN" != arn:aws:iam::*:role/* ]]; then
