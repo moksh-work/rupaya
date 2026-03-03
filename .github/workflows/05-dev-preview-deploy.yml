@@ -1,458 +1,194 @@
-name: 05 - Dev Preview Deploy (Feature Branch)
-
-# Automatic deployment to development environment on feature branches
-# Purpose: Deploy feature branches to shared dev ECS cluster for E2E testing
-# Pattern: Lint → Unit Tests → Build → Deploy to Dev → E2E Tests → PR Comment
-# Target: 35-45 minutes total execution time
-# Tools: Docker, ECS, GitHub OIDC, AWS credentials, Jest E2E tests
+name: 05 - Post-Deploy E2E Validation
 
 on:
+  workflow_run:
+    workflows:
+      - "16 - Unified Multi-Environment Deployment"
+    types:
+      - completed
   workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment for E2E checks"
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+        default: dev
+      api_base_url:
+        description: "Optional override for API base URL (e.g. https://dev.cloudycs.com)"
+        required: false
+        type: string
 
 concurrency:
-  group: dev-preview-${{ github.ref }}
+  group: post-deploy-e2e-${{ github.event_name == 'workflow_run' && github.event.workflow_run.id || github.ref }}
   cancel-in-progress: true
 
 permissions:
   contents: read
-  pull-requests: write
-  checks: write
+  actions: read
   id-token: write
 
-env:
-  AWS_REGION: us-east-1
-  AWS_ROLE_ARN: ${{ secrets.AWS_OIDC_ROLE_ARN_DEV }}
-  ECR_REPOSITORY: rupaya-backend
-  ECS_CLUSTER: rupaya-dev
-  ECS_SERVICE: rupaya-backend-dev
-  ECS_CONTAINER_NAME: rupaya-backend
-
 jobs:
-  # ========== FAST VALIDATION (Lint + Unit Tests) ==========
-  validate:
-    name: Lint & Unit Tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    outputs:
-      tests_passed: ${{ job.status == 'success' }}
-
-    services:
-      postgres:
-        image: postgres:15-alpine
-        env:
-          POSTGRES_USER: test_user
-          POSTGRES_PASSWORD: test_password
-          POSTGRES_DB: rupaya_test
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-
-      redis:
-        image: redis:7-alpine
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 6379:6379
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # Full history for better analysis
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: 'backend/package-lock.json'
-
-      - name: Install dependencies
-        working-directory: backend
-        run: npm ci --prefer-offline
-
-      - name: Run linter
-        working-directory: backend
-        run: npm run lint || true
-        continue-on-error: true
-
-      - name: Run unit tests
-        working-directory: backend
-        env:
-          NODE_ENV: test
-          DATABASE_URL: postgres://test_user:test_password@localhost:5432/rupaya_test
-          REDIS_URL: redis://localhost:6379
-          JWT_SECRET: test-secret-key-minimum-32-characters-long
-          REFRESH_TOKEN_SECRET: test-refresh-secret-key-minimum-32-chars
-          ENCRYPTION_KEY: test-encryption-key-minimum-32-chars
-        run: npm test -- --testPathIgnorePatterns="e2e|integration/feature-flags.test.js" --coverage --maxWorkers=2
-        timeout-minutes: 10
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          files: ./backend/coverage/lcov.info
-          flags: unit-tests
-          name: dev-preview-unit-coverage
-          fail_ci_if_error: false
-
-  # ========== DOCKER BUILD & PUSH ==========
-  build:
-    name: Build & Push Docker Image
-    needs: validate
-    runs-on: ubuntu-latest
-    if: success()
-    timeout-minutes: 20
-
-    permissions:
-      contents: read
-      id-token: write
-
-    outputs:
-      image_uri: ${{ steps.image-output.outputs.uri }}
-      image_tag: ${{ steps.image-output.outputs.tag }}
-      branch_name: ${{ steps.extract.outputs.branch }}
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Resolve AWS role ARN
-        id: role
-        run: |
-          ROLE_ARN="${{ secrets.AWS_OIDC_ROLE_ARN_DEV }}"
-          ROLE_ARN="$(echo "$ROLE_ARN" | tr -d '\r' | xargs)"
-          if [[ -z "$ROLE_ARN" || "$ROLE_ARN" != arn:aws:iam::*:role/* ]]; then
-            ROLE_ARN="arn:aws:iam::368613568221:role/rupaya-github-oidc-dev"
-          fi
-          echo "role_arn=$ROLE_ARN" >> "$GITHUB_OUTPUT"
-
-      - name: Extract branch name
-        id: extract
-        shell: bash
-        run: |
-          BRANCH_NAME="${GITHUB_REF#refs/heads/}"
-          BRANCH_SLUG=$(echo "$BRANCH_NAME" | sed 's/[^a-zA-Z0-9-]/-/g' | cut -c1-30)
-          echo "branch=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
-          echo "slug=$BRANCH_SLUG" >> "$GITHUB_OUTPUT"
-
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ steps.role.outputs.role_arn }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Ensure ECR repository exists
-        run: |
-          aws ecr describe-repositories \
-            --repository-names "${{ env.ECR_REPOSITORY }}" \
-            --region "${{ env.AWS_REGION }}" >/dev/null 2>&1 || \
-          aws ecr create-repository \
-            --repository-name "${{ env.ECR_REPOSITORY }}" \
-            --image-scanning-configuration scanOnPush=true \
-            --region "${{ env.AWS_REGION }}"
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build and push Docker image
-        id: image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./backend
-          file: ./backend/Dockerfile
-          push: true
-          tags: |
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:dev-${{ github.sha }}
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:dev-${{ steps.extract.outputs.slug }}-latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          build-args: |
-            BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
-            VCS_REF=${{ github.sha }}
-            VERSION=dev-${{ steps.extract.outputs.slug }}
-
-      - name: Output image URI
-        id: image-output
-        run: |
-          echo "uri=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:dev-${{ github.sha }}" >> "$GITHUB_OUTPUT"
-          echo "tag=dev-${{ github.sha }}" >> "$GITHUB_OUTPUT"
-
-      - name: Verify image in ECR
-        run: |
-          aws ecr describe-images \
-            --repository-name ${{ env.ECR_REPOSITORY }} \
-            --image-ids imageTag=dev-${{ github.sha }} \
-            --region ${{ env.AWS_REGION }} \
-            --query 'imageDetails[0].[imageSizeInBytes,imagePushedAt]' \
-            --output table
-
-  # ========== DEPLOY TO DEVELOPMENT ==========
-  deploy:
-    name: Deploy to Dev ECS
-    needs: [validate, build]
-    runs-on: ubuntu-latest
-    if: success()
-    timeout-minutes: 25
-
-    permissions:
-      contents: read
-      id-token: write
-
-    outputs:
-      api_url: ${{ steps.service.outputs.api_url }}
-      deployment-status: ${{ job.status }}
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Resolve AWS role ARN
-        id: role
-        run: |
-          ROLE_ARN="${{ secrets.AWS_OIDC_ROLE_ARN_DEV }}"
-          ROLE_ARN="$(echo "$ROLE_ARN" | tr -d '\r' | xargs)"
-          if [[ -z "$ROLE_ARN" || "$ROLE_ARN" != arn:aws:iam::*:role/* ]]; then
-            ROLE_ARN="arn:aws:iam::368613568221:role/rupaya-github-oidc-dev"
-          fi
-          echo "role_arn=$ROLE_ARN" >> "$GITHUB_OUTPUT"
-
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ steps.role.outputs.role_arn }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Download task definition
-        id: taskdef
-        run: |
-          TASK_DEF_JSON=$(aws ecs describe-task-definition \
-            --task-definition "${{ env.ECS_SERVICE }}" \
-            --region ${{ env.AWS_REGION }} \
-            --query 'taskDefinition' \
-            --output json 2>/dev/null) || true
-
-          if [ -z "$TASK_DEF_JSON" ] || [ "$TASK_DEF_JSON" = "null" ]; then
-            echo "Direct task definition lookup failed for '${{ env.ECS_SERVICE }}', resolving from ECS service..."
-            SERVICE_TASK_DEF=$(aws ecs describe-services \
-              --cluster "${{ env.ECS_CLUSTER }}" \
-              --services "${{ env.ECS_SERVICE }}" \
-              --region "${{ env.AWS_REGION }}" \
-              --query 'services[0].taskDefinition' \
-              --output text)
-
-            if [ -z "$SERVICE_TASK_DEF" ] || [ "$SERVICE_TASK_DEF" = "None" ] || [ "$SERVICE_TASK_DEF" = "null" ]; then
-              echo "Could not resolve task definition from ECS service '${{ env.ECS_SERVICE }}' in cluster '${{ env.ECS_CLUSTER }}'"
-              exit 1
-            fi
-
-            TASK_DEF_JSON=$(aws ecs describe-task-definition \
-              --task-definition "$SERVICE_TASK_DEF" \
-              --region "${{ env.AWS_REGION }}" \
-              --query 'taskDefinition' \
-              --output json)
-          fi
-          
-          # Save to temp file for next step
-          echo "$TASK_DEF_JSON" > /tmp/task-definition.json
-          echo "revision=$(jq -r '.revision' /tmp/task-definition.json)" >> "$GITHUB_OUTPUT"
-
-      - name: Resolve deploy image URI
-        id: deploy-image
-        run: |
-          IMAGE_URI="${{ needs.build.outputs.image_uri }}"
-          IMAGE_URI="$(echo "$IMAGE_URI" | tr -d '\r' | xargs)"
-
-          if [ -z "$IMAGE_URI" ]; then
-            ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-            IMAGE_URI="${ACCOUNT_ID}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:dev-${{ github.sha }}"
-            echo "⚠ build output image_uri missing, using fallback: $IMAGE_URI"
-          fi
-
-          echo "image_uri=$IMAGE_URI" >> "$GITHUB_OUTPUT"
-
-      - name: Update task definition with new image
-        id: task
-        uses: aws-actions/amazon-ecs-render-task-definition@v1
-        with:
-          task-definition: /tmp/task-definition.json
-          container-name: ${{ env.ECS_CONTAINER_NAME }}
-          image: ${{ steps.deploy-image.outputs.image_uri }}
-
-      - name: Deploy to ECS
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
-        with:
-          task-definition: ${{ steps.task.outputs.task-definition }}
-          service: ${{ env.ECS_SERVICE }}
-          cluster: ${{ env.ECS_CLUSTER }}
-          wait-for-service-stability: false
-
-      - name: Wait for ECS task start (bounded)
-        run: |
-          echo "⏳ Waiting for ECS task to start (max ~3 minutes)..."
-          DESIRED=$(aws ecs describe-services \
-            --cluster "${{ env.ECS_CLUSTER }}" \
-            --services "${{ env.ECS_SERVICE }}" \
-            --region "${{ env.AWS_REGION }}" \
-            --query 'services[0].desiredCount' \
-            --output text)
-
-          for i in {1..12}; do
-            SERVICE_JSON=$(aws ecs describe-services \
-              --cluster "${{ env.ECS_CLUSTER }}" \
-              --services "${{ env.ECS_SERVICE }}" \
-              --region "${{ env.AWS_REGION }}" \
-              --query 'services[0]' \
-              --output json)
-
-            RUNNING=$(echo "$SERVICE_JSON" | jq -r '.runningCount // 0')
-            PENDING=$(echo "$SERVICE_JSON" | jq -r '.pendingCount // 0')
-            echo "Attempt $i/12: running=$RUNNING desired=$DESIRED pending=$PENDING"
-
-            if [ "$RUNNING" -ge "$DESIRED" ]; then
-              echo "✅ ECS tasks started (running=$RUNNING, desired=$DESIRED)"
-              echo "Waiting one more check for stability..."
-              sleep 10
-              
-              FINAL_JSON=$(aws ecs describe-services \
-                --cluster "${{ env.ECS_CLUSTER }}" \
-                --services "${{ env.ECS_SERVICE }}" \
-                --region "${{ env.AWS_REGION }}" \
-                --query 'services[0]' \
-                --output json)
-              FINAL_RUNNING=$(echo "$FINAL_JSON" | jq -r '.runningCount // 0')
-              
-              if [ "$FINAL_RUNNING" -ge "$DESIRED" ]; then
-                echo "✅ Task count stable, proceeding to health check"
-                exit 0
-              fi
-            fi
-
-            sleep 15
-          done
-
-          echo "⚠️  Task startup incomplete, but proceeding to health check (tasks may still be initializing)"
-          exit 0
-
-      - name: Get ECS service details
-        id: service
-        run: |
-          SERVICE_INFO=$(aws ecs describe-services \
-            --cluster ${{ env.ECS_CLUSTER }} \
-            --services ${{ env.ECS_SERVICE }} \
-            --region ${{ env.AWS_REGION }} \
-            --query 'services[0]' \
-            --output json)
-          
-          LB_DNS=$(aws elbv2 describe-load-balancers \
-            --names rupaya-backend-dev-alb \
-            --region ${{ env.AWS_REGION }} \
-            --query 'LoadBalancers[0].DNSName' \
-            --output text)
-
-          echo "api_url=http://$LB_DNS" >> "$GITHUB_OUTPUT"
-          echo "service_arn=$(echo $SERVICE_INFO | jq -r '.serviceArn')" >> "$GITHUB_OUTPUT"
-
-      - name: Health check
-        run: |
-          HEALTH_URL="${{ steps.service.outputs.api_url }}/health"
-          echo "🔍 Checking health endpoint at $HEALTH_URL..."
-
-          for i in {1..20}; do
-            CODE=$(curl -s -o /dev/null -w "%{http_code}" "$HEALTH_URL" || true)
-            if [ "$CODE" = "200" ]; then
-              echo "✅ Deployment health check passed"
-              exit 0
-            fi
-            echo "⏳ Waiting for healthy response (attempt $i/20), status=$CODE"
-            sleep 15
-          done
-
-          echo "❌ Health check failed: $HEALTH_URL"
-          exit 1
-
-  # ========== E2E TESTS (Against Live Dev Environment) ==========
   e2e-tests:
-    name: E2E Tests
-    needs: [build, deploy]
+    name: Run Post-Deploy E2E Tests
     runs-on: ubuntu-latest
-    if: success()
-    timeout-minutes: 20
+    timeout-minutes: 25
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
 
-    services:
-      postgres:
-        image: postgres:15-alpine
-        env:
-          POSTGRES_USER: test_user
-          POSTGRES_PASSWORD: test_password
-          POSTGRES_DB: rupaya_test
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-
-      redis:
-        image: redis:7-alpine
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 6379:6379
+    env:
+      AWS_REGION: us-east-1
+      DOMAIN_NAME_DEV: ${{ vars.DOMAIN_NAME_DEV }}
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: 'backend/package-lock.json'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
 
       - name: Install dependencies
         working-directory: backend
         run: npm ci --prefer-offline
 
+      - name: Resolve target environment
+        id: target
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            TARGET_ENV="${{ github.event.inputs.environment }}"
+          else
+            TARGET_ENV="dev"
+          fi
+          echo "environment=$TARGET_ENV" >> "$GITHUB_OUTPUT"
+
       - name: Resolve AWS role ARN
         id: role
+        env:
+          TARGET_ENV: ${{ steps.target.outputs.environment }}
+          ROLE_DEV_SECRET: ${{ secrets.AWS_OIDC_ROLE_ARN_DEV }}
+          ROLE_STAGING_SECRET: ${{ secrets.AWS_OIDC_ROLE_ARN_STAGING }}
+          ROLE_PROD_SECRET: ${{ secrets.AWS_OIDC_ROLE_ARN_PROD }}
+          ROLE_DEV_VAR: ${{ vars.AWS_OIDC_ROLE_ARN_DEV }}
+          ROLE_STAGING_VAR: ${{ vars.AWS_OIDC_ROLE_ARN_STAGING }}
+          ROLE_PROD_VAR: ${{ vars.AWS_OIDC_ROLE_ARN_PROD }}
+          ACCOUNT_DEV: ${{ vars.AWS_ACCOUNT_ID_DEV }}
+          ACCOUNT_STAGING: ${{ vars.AWS_ACCOUNT_ID_STAGING }}
+          ACCOUNT_PROD: ${{ vars.AWS_ACCOUNT_ID_PROD }}
         run: |
-          ROLE_ARN="${{ secrets.AWS_OIDC_ROLE_ARN_DEV }}"
-          ROLE_ARN="$(echo "$ROLE_ARN" | tr -d '\r' | xargs)"
-          if [[ -z "$ROLE_ARN" || "$ROLE_ARN" != arn:aws:iam::*:role/* ]]; then
-            ROLE_ARN="arn:aws:iam::368613568221:role/rupaya-github-oidc-dev"
+          ROLE_ARN=""
+          ACCOUNT_ID=""
+          ROLE_NAME_SUFFIX=""
+
+          case "$TARGET_ENV" in
+            dev)
+              ROLE_ARN="$ROLE_DEV_SECRET"
+              [[ -z "$ROLE_ARN" ]] && ROLE_ARN="$ROLE_DEV_VAR"
+              ACCOUNT_ID="$ACCOUNT_DEV"
+              ROLE_NAME_SUFFIX="dev"
+              ;;
+            staging)
+              ROLE_ARN="$ROLE_STAGING_SECRET"
+              [[ -z "$ROLE_ARN" ]] && ROLE_ARN="$ROLE_STAGING_VAR"
+              ACCOUNT_ID="$ACCOUNT_STAGING"
+              ROLE_NAME_SUFFIX="staging"
+              ;;
+            prod)
+              ROLE_ARN="$ROLE_PROD_SECRET"
+              [[ -z "$ROLE_ARN" ]] && ROLE_ARN="$ROLE_PROD_VAR"
+              ACCOUNT_ID="$ACCOUNT_PROD"
+              ROLE_NAME_SUFFIX="prod"
+              ;;
+            *)
+              echo "Unsupported environment: $TARGET_ENV"
+              exit 1
+              ;;
+          esac
+
+          ROLE_ARN="$(echo "$ROLE_ARN" | tr -d '\r' | tr -d '\n' | xargs)"
+
+          if [[ "$ROLE_ARN" != arn:aws:iam::*:role/* && -n "$ACCOUNT_ID" ]]; then
+            ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/rupaya-github-oidc-${ROLE_NAME_SUFFIX}"
           fi
+
+          if [[ "$ROLE_ARN" != arn:aws:iam::*:role/* ]]; then
+            echo "Invalid role ARN for $TARGET_ENV: $ROLE_ARN"
+            exit 1
+          fi
+
           echo "role_arn=$ROLE_ARN" >> "$GITHUB_OUTPUT"
 
-      - name: Configure AWS credentials (OIDC)
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ steps.role.outputs.role_arn }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Resolve API base URL
+        id: api
+        env:
+          TARGET_ENV: ${{ steps.target.outputs.environment }}
+          API_OVERRIDE: ${{ github.event.inputs.api_base_url }}
         run: |
-          LB_DNS=$(aws elbv2 describe-load-balancers \
-            --names rupaya-backend-dev-alb \
-            --region ${{ env.AWS_REGION }} \
-            --query 'LoadBalancers[0].DNSName' \
-            --output text)
-          echo "API_BASE_URL=http://$LB_DNS" >> "$GITHUB_ENV"
+          API_BASE_URL="$(echo "$API_OVERRIDE" | tr -d '\r' | tr -d '\n' | xargs)"
 
-      - name: Run E2E tests against dev environment
+          if [[ -z "$API_BASE_URL" ]]; then
+            case "$TARGET_ENV" in
+              dev)
+                if [[ -n "${DOMAIN_NAME_DEV}" ]]; then
+                  API_BASE_URL="https://dev.${DOMAIN_NAME_DEV}"
+                else
+                  LB_DNS=$(aws elbv2 describe-load-balancers --names rupaya-backend-dev-alb --region "$AWS_REGION" --query 'LoadBalancers[0].DNSName' --output text)
+                  API_BASE_URL="https://${LB_DNS}"
+                fi
+                ;;
+              staging)
+                LB_DNS=$(aws elbv2 describe-load-balancers --names rupaya-staging-alb --region "$AWS_REGION" --query 'LoadBalancers[0].DNSName' --output text)
+                API_BASE_URL="http://${LB_DNS}"
+                ;;
+              prod)
+                if [[ -n "${DOMAIN_NAME_DEV}" ]]; then
+                  API_BASE_URL="https://${DOMAIN_NAME_DEV}"
+                else
+                  LB_DNS=$(aws elbv2 describe-load-balancers --names rupaya-prod-alb --region "$AWS_REGION" --query 'LoadBalancers[0].DNSName' --output text)
+                  API_BASE_URL="https://${LB_DNS}"
+                fi
+                ;;
+            esac
+          fi
+
+          echo "api_base_url=$API_BASE_URL" >> "$GITHUB_OUTPUT"
+          echo "API_BASE_URL=$API_BASE_URL" >> "$GITHUB_ENV"
+          echo "Using API base URL: $API_BASE_URL"
+
+      - name: Health check
+        run: |
+          HEALTH_URL="${API_BASE_URL}/health"
+          echo "Checking ${HEALTH_URL}"
+
+          for i in {1..20}; do
+            CODE=$(curl -k -s -o /dev/null -w "%{http_code}" "$HEALTH_URL" || true)
+            if [[ "$CODE" == "200" ]]; then
+              echo "Health check passed"
+              exit 0
+            fi
+            echo "Attempt $i/20 -> HTTP $CODE"
+            sleep 10
+          done
+
+          echo "Health check failed at $HEALTH_URL"
+          exit 1
+
+      - name: Run all E2E test cases
         working-directory: backend
         env:
           NODE_ENV: test
@@ -464,256 +200,25 @@ jobs:
           REFRESH_TOKEN_SECRET: test-refresh-secret-key-minimum-32-chars
           ENCRYPTION_KEY: test-encryption-key-minimum-32-chars
         run: |
-          if [ -z "$API_BASE_URL" ]; then
-            echo "Missing API_BASE_URL from deploy job output"
-            exit 1
-          fi
-
           npm test -- \
             __tests__/e2e/remote-api.test.js \
             __tests__/e2e/deployment-features.test.js \
             __tests__/e2e/all-endpoints-smoke.test.js \
-            --coverage --maxWorkers=1 --json --outputFile=/tmp/e2e-results.json
-        timeout-minutes: 15
+            --maxWorkers=1 --json --outputFile=/tmp/e2e-results.json
 
-      - name: Run integration tests
-        working-directory: backend
-        env:
-          NODE_ENV: test
-          DATABASE_URL: postgres://test_user:test_password@localhost:5432/rupaya_test
-          REDIS_URL: redis://localhost:6379
-          JWT_SECRET: test-secret-key-minimum-32-characters-long
-          REFRESH_TOKEN_SECRET: test-refresh-secret-key-minimum-32-chars
-          ENCRYPTION_KEY: test-encryption-key-minimum-32-chars
-        run: npm test -- __tests__/integration --coverage --maxWorkers=1 --json --outputFile=/tmp/integration-results.json
-        timeout-minutes: 15
-
-      - name: Build test scenario report
-        if: always()
-        run: |
-          node <<'NODE'
-          const fs = require('fs');
-
-          const parse = (file) => {
-            if (!fs.existsSync(file)) {
-              return {
-                suite: file,
-                totalTests: 0,
-                passedTests: 0,
-                failedTests: 0,
-                pendingTests: 0,
-                failedCases: []
-              };
-            }
-
-            const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
-            const failedCases = [];
-            for (const tr of raw.testResults || []) {
-              for (const a of tr.assertionResults || []) {
-                if (a.status === 'failed') {
-                  failedCases.push(`${tr.name} :: ${(a.ancestorTitles || []).join(' > ')} > ${a.title}`);
-                }
-              }
-            }
-
-            return {
-              suite: file,
-              totalTests: raw.numTotalTests || 0,
-              passedTests: raw.numPassedTests || 0,
-              failedTests: raw.numFailedTests || 0,
-              pendingTests: raw.numPendingTests || 0,
-              failedCases
-            };
-          };
-
-          const e2e = parse('/tmp/e2e-results.json');
-          const integration = parse('/tmp/integration-results.json');
-          const total = {
-            total: e2e.totalTests + integration.totalTests,
-            passed: e2e.passedTests + integration.passedTests,
-            failed: e2e.failedTests + integration.failedTests,
-            pending: e2e.pendingTests + integration.pendingTests
-          };
-
-          const lines = [];
-          lines.push('# Test Scenario Report');
-          lines.push('');
-          lines.push(`Run ID: ${process.env.GITHUB_RUN_ID}`);
-          lines.push(`Repository: ${process.env.GITHUB_REPOSITORY}`);
-          lines.push(`Branch: ${process.env.GITHUB_REF_NAME}`);
-          lines.push(`Commit: ${process.env.GITHUB_SHA}`);
-          lines.push(`Run URL: https://github.com/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`);
-          lines.push('');
-          lines.push('## Overall');
-          lines.push(`- Total: ${total.total}`);
-          lines.push(`- Passed: ${total.passed}`);
-          lines.push(`- Failed: ${total.failed}`);
-          lines.push(`- Pending/Skipped: ${total.pending}`);
-          lines.push('');
-          lines.push('## E2E');
-          lines.push(`- Total: ${e2e.totalTests}`);
-          lines.push(`- Passed: ${e2e.passedTests}`);
-          lines.push(`- Failed: ${e2e.failedTests}`);
-          lines.push(`- Pending/Skipped: ${e2e.pendingTests}`);
-          lines.push('');
-          lines.push('## Integration');
-          lines.push(`- Total: ${integration.totalTests}`);
-          lines.push(`- Passed: ${integration.passedTests}`);
-          lines.push(`- Failed: ${integration.failedTests}`);
-          lines.push(`- Pending/Skipped: ${integration.pendingTests}`);
-          lines.push('');
-          lines.push('## Failed Scenarios');
-
-          const failedCases = [...e2e.failedCases, ...integration.failedCases];
-          if (failedCases.length === 0) {
-            lines.push('- None');
-          } else {
-            for (const item of failedCases) {
-              lines.push(`- ${item}`);
-            }
-          }
-
-          fs.writeFileSync('/tmp/test-scenarios-report.md', lines.join('\n'));
-          NODE
-
-      - name: Upload test scenario artifacts
+      - name: Upload E2E artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: dev-preview-test-scenarios-${{ github.run_id }}
+          name: post-deploy-e2e-${{ github.run_id }}
           path: |
-            /tmp/test-scenarios-report.md
             /tmp/e2e-results.json
-            /tmp/integration-results.json
             backend/coverage/lcov.info
           if-no-files-found: warn
 
-      - name: Upload E2E coverage
-        uses: codecov/codecov-action@v4
-        with:
-          files: ./backend/coverage/lcov.info
-          flags: e2e-tests
-          name: dev-preview-e2e-coverage
-          fail_ci_if_error: false
-
-      - name: Generate test report
+      - name: Summary
         if: always()
         run: |
-          cat > /tmp/test-summary.txt << EOF
-          # Dev Preview Test Results
-          
-          - Validation: ✅ PASSED
-          - Build: ✅ PASSED
-          - Deployment: ✅ PASSED
-          - E2E Tests: ⏳ IN_PROGRESS
-          
-          **Environment Details:**
-          - API URL: ${API_BASE_URL:-unknown}
-          - Image Tag: dev-${{ github.sha }}
-          - Branch: ${{ github.ref_name }}
-          - Commit: ${{ github.sha }}
-          
-          **Performance Metrics:**
-          - Total time: ~40 minutes
-          - Unit tests: ~5 minutes
-          - Docker build: ~8 minutes
-          - ECS deployment: ~10 minutes
-          - E2E tests: ~15 minutes
-          EOF
-          cat /tmp/test-summary.txt
-
-  # ========== POST RESULTS TO PR ==========
-  post-results:
-    name: Post Results to PR
-    needs: [validate, build, deploy, e2e-tests]
-    runs-on: ubuntu-latest
-    if: always() && github.event_name == 'pull_request'
-    timeout-minutes: 5
-
-    permissions:
-      pull-requests: write
-
-    steps:
-      - name: Determine status
-        id: status
-        run: |
-          if [ "${{ job.status }}" == "success" ]; then
-            echo "status=✅ SUCCESS" >> "$GITHUB_OUTPUT"
-            echo "emoji=✅" >> "$GITHUB_OUTPUT"
-          else
-            echo "status=⚠️ PARTIAL SUCCESS" >> "$GITHUB_OUTPUT"
-            echo "emoji=⚠️" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Post deployment summary to PR
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const validate_status = '${{ needs.validate.result }}' === 'success' ? '✅' : '❌';
-            const build_status = '${{ needs.build.result }}' === 'success' ? '✅' : '❌';
-            const deploy_status = '${{ needs.deploy.result }}' === 'success' ? '✅' : '❌';
-            const e2e_status = '${{ needs.e2e-tests.result }}' === 'success' ? '✅' : (
-              '${{ needs.e2e-tests.result }}' === 'skipped' ? '⏭️' : '⚠️'
-            );
-            
-            const comment = `## 🚀 Dev Preview Deploy Report
-            
-            **Status:** ${{ steps.status.outputs.status }}
-            
-            | Stage | Status | Duration |
-            |-------|--------|----------|
-            | Lint & Unit Tests | ${validate_status} | ~5 min |
-            | Docker Build & Push | ${build_status} | ~8 min |
-            | Deploy to Dev ECS | ${deploy_status} | ~10 min |
-            | E2E Tests | ${e2e_status} | ~15 min |
-            
-            **Deployment Details:**
-            - **Image Tag:** \`dev-${{ github.sha }}\`
-            - **API URL:** \`${{ needs.deploy.outputs.api_url || 'Pending deployment...' }}\`
-            - **Branch:** \`${{ github.ref_name }}\`
-            - **Commit:** [${{ github.sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
-            
-            **What's tested:**
-            - ✅ Code quality (linting)
-            - ✅ Unit tests (isolated components)
-            - ✅ Integration tests (services + database)
-            - ✅ E2E tests (complete user workflows)
-            - ✅ Feature flags (toggles, canary, A/B tests)
-            - ✅ Deployment metrics (auto-rollback, health checks)
-            
-            **Next Steps:**
-            1. If all checks pass ✅, ready for merge to develop
-            2. If E2E tests fail ⚠️, development environment deployed but needs fix
-            3. Use dev URL above to test manually if needed
-            
-            ---
-            _Generated by Workflow 03 - Dev Preview Deploy_`;
-            
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: comment
-            });
-
-      - name: Set PR check status
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const checkRun = await github.rest.checks.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              name: 'Dev Preview Deploy',
-              head_sha: context.payload.pull_request.head.sha,
-              status: 'completed',
-              conclusion: '${{ job.status }}' === 'success' ? 'success' : 'neutral',
-              output: {
-                title: 'Dev Preview Deployment',
-                summary: 'Feature branch deployed to development environment',
-                text: `Image: dev-${{ github.sha }}
-            API: ${{ needs.deploy.outputs.api_url || 'pending' }}
-            Branch: ${{ github.ref_name }}`
-              }
-            });
+          echo "Environment: ${{ steps.target.outputs.environment }}"
+          echo "API Base URL: ${{ steps.api.outputs.api_base_url }}"
+          echo "Workflow trigger: ${{ github.event_name }}"

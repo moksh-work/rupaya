@@ -5,10 +5,13 @@
  */
 
 const request = require('supertest');
+const https = require('https');
+const http = require('http');
 const app = require('../../src/app');
 
 const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:3000';
 const shouldRunE2E = process.env.RUN_E2E_TESTS === 'true' || process.env.NODE_ENV === 'test';
+const shouldRunRemote = process.env.RUN_REMOTE_TESTS === 'true';
 const useInProcessRequests = /^https?:\/\/localhost(?::\d+)?$/i.test(API_BASE_URL);
 
 // ========== HTTP Request Helper ==========
@@ -37,6 +40,69 @@ const requestJson = async ({ method, path, token, body }) => {
       body: res.body || {},
       raw: typeof res.text === 'string' ? res.text : JSON.stringify(res.body || {})
     };
+  }
+
+  if (shouldRunRemote) {
+    return await new Promise((resolve, reject) => {
+      const lib = url.protocol === 'https:' ? https : http;
+      const payload = body ? JSON.stringify(body) : null;
+
+      const headers = {
+        Accept: 'application/json'
+      };
+
+      if (payload) {
+        headers['Content-Type'] = 'application/json';
+        headers['Content-Length'] = Buffer.byteLength(payload);
+      }
+
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
+      const req = lib.request(
+        {
+          method,
+          hostname: url.hostname,
+          port: url.port || (url.protocol === 'https:' ? 443 : 80),
+          path: `${url.pathname}${url.search}`,
+          headers,
+          timeout: 15000
+        },
+        (res) => {
+          let raw = '';
+          res.on('data', (chunk) => {
+            raw += chunk;
+          });
+          res.on('end', () => {
+            let parsed = {};
+            try {
+              parsed = raw ? JSON.parse(raw) : {};
+            } catch (error) {
+              parsed = { message: raw };
+            }
+
+            resolve({
+              status: res.statusCode,
+              headers: res.headers,
+              body: parsed,
+              raw
+            });
+          });
+        }
+      );
+
+      req.on('error', reject);
+      req.on('timeout', () => {
+        req.destroy(new Error('request timeout'));
+      });
+
+      if (payload) {
+        req.write(payload);
+      }
+
+      req.end();
+    });
   }
 
   throw new Error(`Remote mode for API_BASE_URL=${API_BASE_URL} is not enabled in this local E2E run`);
