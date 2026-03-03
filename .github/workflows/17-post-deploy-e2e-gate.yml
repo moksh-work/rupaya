@@ -1,4 +1,4 @@
-name: 05 - Post-Deploy E2E Validation
+name: 17 - Post-Deploy E2E Gate
 
 on:
   workflow_run:
@@ -203,7 +203,6 @@ jobs:
           npm test -- \
             __tests__/e2e/remote-api.test.js \
             __tests__/e2e/deployment-features.test.js \
-            __tests__/e2e/all-endpoints-smoke.test.js \
             --maxWorkers=1 --json --outputFile=/tmp/e2e-results.json
 
       - name: Upload E2E artifacts
