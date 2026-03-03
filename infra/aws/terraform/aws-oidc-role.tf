@@ -300,6 +300,7 @@ data "aws_iam_policy_document" "terraform_infra_policy" {
       "rds:*",
       "elasticache:*",
       "acm:*",
+        "route53:*",
       "cloudformation:*",
       "logs:*",
       "autoscaling:*",
