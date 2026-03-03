@@ -136,6 +136,10 @@ jobs:
     env:
       ENVIRONMENT: ${{ needs.determine-environment.outputs.environment }}
       IMAGE_TAG: ${{ needs.determine-environment.outputs.image_tag }}
+      ACM_CERTIFICATE_ARN_DEV: ${{ vars.ACM_CERTIFICATE_ARN_DEV }}
+      DOMAIN_NAME_DEV: ${{ vars.DOMAIN_NAME_DEV }}
+      ROUTE53_ZONE_ID_DEV: ${{ vars.ROUTE53_ZONE_ID_DEV }}
+      ACM_CERTIFICATE_ARN_PROD: ${{ vars.ACM_CERTIFICATE_ARN_PROD }}
     steps:
       - uses: actions/checkout@v4
 
@@ -194,6 +198,25 @@ jobs:
             exit 1
           fi
           echo "role_arn=$ROLE_ARN" >> $GITHUB_OUTPUT
+
+      - name: Preflight resolved account
+        env:
+          ROLE_ARN: ${{ steps.role.outputs.role_arn }}
+          EXPECTED_DEV_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID_DEV }}
+        run: |
+          ROLE_ACCOUNT_ID=$(echo "$ROLE_ARN" | sed -E 's#^arn:aws:iam::([0-9]{12}):role/.+#\1#')
+          if [[ ! "$ROLE_ACCOUNT_ID" =~ ^[0-9]{12}$ ]]; then
+            echo "Could not parse account id from role ARN: $ROLE_ARN"
+            exit 1
+          fi
+
+          echo "Resolved AWS account id from role ARN: $ROLE_ACCOUNT_ID"
+
+          if [[ "$ENVIRONMENT" == "dev" && -n "$EXPECTED_DEV_ACCOUNT_ID" && "$ROLE_ACCOUNT_ID" != "$EXPECTED_DEV_ACCOUNT_ID" ]]; then
+            echo "Role account id ($ROLE_ACCOUNT_ID) does not match AWS_ACCOUNT_ID_DEV ($EXPECTED_DEV_ACCOUNT_ID)"
+            echo "Update AWS_OIDC_ROLE_ARN_DEV / AWS_ACCOUNT_ID_DEV to the same account before deploying"
+            exit 1
+          fi
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -229,6 +252,10 @@ jobs:
     env:
       ENVIRONMENT: ${{ needs.determine-environment.outputs.environment }}
       IMAGE_TAG: ${{ needs.determine-environment.outputs.image_tag }}
+      ACM_CERTIFICATE_ARN_DEV: ${{ vars.ACM_CERTIFICATE_ARN_DEV }}
+      DOMAIN_NAME_DEV: ${{ vars.DOMAIN_NAME_DEV }}
+      ROUTE53_ZONE_ID_DEV: ${{ vars.ROUTE53_ZONE_ID_DEV }}
+      ACM_CERTIFICATE_ARN_PROD: ${{ vars.ACM_CERTIFICATE_ARN_PROD }}
     steps:
       - uses: actions/checkout@v4
 
@@ -287,6 +314,25 @@ jobs:
             exit 1
           fi
           echo "role_arn=$ROLE_ARN" >> $GITHUB_OUTPUT
+
+      - name: Preflight resolved account
+        env:
+          ROLE_ARN: ${{ steps.role.outputs.role_arn }}
+          EXPECTED_DEV_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID_DEV }}
+        run: |
+          ROLE_ACCOUNT_ID=$(echo "$ROLE_ARN" | sed -E 's#^arn:aws:iam::([0-9]{12}):role/.+#\1#')
+          if [[ ! "$ROLE_ACCOUNT_ID" =~ ^[0-9]{12}$ ]]; then
+            echo "Could not parse account id from role ARN: $ROLE_ARN"
+            exit 1
+          fi
+
+          echo "Resolved AWS account id from role ARN: $ROLE_ACCOUNT_ID"
+
+          if [[ "$ENVIRONMENT" == "dev" && -n "$EXPECTED_DEV_ACCOUNT_ID" && "$ROLE_ACCOUNT_ID" != "$EXPECTED_DEV_ACCOUNT_ID" ]]; then
+            echo "Role account id ($ROLE_ACCOUNT_ID) does not match AWS_ACCOUNT_ID_DEV ($EXPECTED_DEV_ACCOUNT_ID)"
+            echo "Update AWS_OIDC_ROLE_ARN_DEV / AWS_ACCOUNT_ID_DEV to the same account before deploying"
+            exit 1
+          fi
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -399,10 +445,39 @@ jobs:
           )
 
           if [[ "$ENVIRONMENT" == "dev" ]]; then
+            ACM_CERT_ARN="$(echo "${ACM_CERTIFICATE_ARN_DEV}" | tr -d '\r' | tr -d '\n' | xargs)"
+            DOMAIN_NAME="$(echo "${DOMAIN_NAME_DEV}" | tr -d '\r' | tr -d '\n' | xargs)"
+            ROUTE53_ZONE_ID="$(echo "${ROUTE53_ZONE_ID_DEV}" | tr -d '\r' | tr -d '\n' | xargs)"
+
             TF_APPLY_ARGS+=(
               -var="ecs_desired_count=2"
               -var="ecs_min_count=2"
             )
+
+            if [[ -n "$ACM_CERT_ARN" ]]; then
+              TF_APPLY_ARGS+=(
+                -var="acm_certificate_arn=${ACM_CERT_ARN}"
+              )
+            elif [[ -n "$DOMAIN_NAME" && -n "$ROUTE53_ZONE_ID" ]]; then
+              TF_APPLY_ARGS+=(
+                -var="create_acm_certificate=true"
+                -var="domain_name=${DOMAIN_NAME}"
+                -var="route53_zone_id=${ROUTE53_ZONE_ID}"
+              )
+            elif [[ -n "$DOMAIN_NAME" ]]; then
+              TF_APPLY_ARGS+=(
+                -var="create_acm_certificate=true"
+                -var="create_route53_zone=true"
+                -var="domain_name=${DOMAIN_NAME}"
+              )
+            fi
+          elif [[ "$ENVIRONMENT" == "prod" ]]; then
+            ACM_CERT_ARN="$(echo "${ACM_CERTIFICATE_ARN_PROD}" | tr -d '\r' | tr -d '\n' | xargs)"
+            if [[ -n "$ACM_CERT_ARN" ]]; then
+              TF_APPLY_ARGS+=(
+                -var="certificate_arn=${ACM_CERT_ARN}"
+              )
+            fi
           fi
 
           terraform apply "${TF_APPLY_ARGS[@]}"

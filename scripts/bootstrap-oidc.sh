@@ -68,7 +68,8 @@ WHAT THIS SCRIPT DOES
        - Staging only
        - Production only
        - All environments
-    5. Creates IAM OIDC provider + selected role(s) via Terraform
+     5. Creates IAM OIDC provider + selected role(s) via Terraform
+         (includes infra permissions such as ACM and Route53 for Terraform deployments)
     6. Stores role ARN(s) in GitHub secrets
     7. Provides instructions for GitHub environment setup
     8. Triggers OIDC test workflow
@@ -118,6 +119,7 @@ IAM ROLES CREATED
     - rupaya-github-oidc-dev       (allowed: develop, feature/* branches)
     - rupaya-github-oidc-staging   (allowed: release/* branches)
     - rupaya-github-oidc-prod      (allowed: main branch)
+    - Inline policy includes route53:* and acm:* for DNS + certificate automation
 
 DOCUMENTATION
     - Full guide:       docs/AWS_OIDC_SETUP.md
@@ -871,6 +873,7 @@ print_summary() {
         echo "      - rupaya-github-oidc-dev (development)"
         echo "      - rupaya-github-oidc-staging (staging)"
         echo "      - rupaya-github-oidc-prod (production)"
+        echo "      - includes route53:* and acm:* permissions"
         echo "   3. GitHub secrets stored:"
         echo "      - AWS_OIDC_ROLE_ARN_DEV"
         echo "      - AWS_OIDC_ROLE_ARN_STAGING"
@@ -878,16 +881,19 @@ print_summary() {
     elif [ "$DEPLOY_ENVIRONMENTS" = "development" ]; then
         echo "   2. IAM Role created:"
         echo "      - rupaya-github-oidc-dev (development)"
+        echo "      - includes route53:* and acm:* permissions"
         echo "   3. GitHub secret stored:"
         echo "      - AWS_OIDC_ROLE_ARN_DEV"
     elif [ "$DEPLOY_ENVIRONMENTS" = "staging" ]; then
         echo "   2. IAM Role created:"
         echo "      - rupaya-github-oidc-staging (staging)"
+        echo "      - includes route53:* and acm:* permissions"
         echo "   3. GitHub secret stored:"
         echo "      - AWS_OIDC_ROLE_ARN_STAGING"
     elif [ "$DEPLOY_ENVIRONMENTS" = "production" ]; then
         echo "   2. IAM Role created:"
         echo "      - rupaya-github-oidc-prod (production)"
+        echo "      - includes route53:* and acm:* permissions"
         echo "   3. GitHub secret stored:"
         echo "      - AWS_OIDC_ROLE_ARN_PROD"
     fi

@@ -1,0 +1,223 @@
+name: 17 - Post-Deploy E2E Gate
+
+on:
+  workflow_run:
+    workflows:
+      - "16 - Unified Multi-Environment Deployment"
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment for E2E checks"
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+        default: dev
+      api_base_url:
+        description: "Optional override for API base URL (e.g. https://dev.cloudycs.com)"
+        required: false
+        type: string
+
+concurrency:
+  group: post-deploy-e2e-${{ github.event_name == 'workflow_run' && github.event.workflow_run.id || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+
+jobs:
+  e2e-tests:
+    name: Run Post-Deploy E2E Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+
+    env:
+      AWS_REGION: us-east-1
+      DOMAIN_NAME_DEV: ${{ vars.DOMAIN_NAME_DEV }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: backend
+        run: npm ci --prefer-offline
+
+      - name: Resolve target environment
+        id: target
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            TARGET_ENV="${{ github.event.inputs.environment }}"
+          else
+            TARGET_ENV="dev"
+          fi
+          echo "environment=$TARGET_ENV" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve AWS role ARN
+        id: role
+        env:
+          TARGET_ENV: ${{ steps.target.outputs.environment }}
+          ROLE_DEV_SECRET: ${{ secrets.AWS_OIDC_ROLE_ARN_DEV }}
+          ROLE_STAGING_SECRET: ${{ secrets.AWS_OIDC_ROLE_ARN_STAGING }}
+          ROLE_PROD_SECRET: ${{ secrets.AWS_OIDC_ROLE_ARN_PROD }}
+          ROLE_DEV_VAR: ${{ vars.AWS_OIDC_ROLE_ARN_DEV }}
+          ROLE_STAGING_VAR: ${{ vars.AWS_OIDC_ROLE_ARN_STAGING }}
+          ROLE_PROD_VAR: ${{ vars.AWS_OIDC_ROLE_ARN_PROD }}
+          ACCOUNT_DEV: ${{ vars.AWS_ACCOUNT_ID_DEV }}
+          ACCOUNT_STAGING: ${{ vars.AWS_ACCOUNT_ID_STAGING }}
+          ACCOUNT_PROD: ${{ vars.AWS_ACCOUNT_ID_PROD }}
+        run: |
+          ROLE_ARN=""
+          ACCOUNT_ID=""
+          ROLE_NAME_SUFFIX=""
+
+          case "$TARGET_ENV" in
+            dev)
+              ROLE_ARN="$ROLE_DEV_SECRET"
+              [[ -z "$ROLE_ARN" ]] && ROLE_ARN="$ROLE_DEV_VAR"
+              ACCOUNT_ID="$ACCOUNT_DEV"
+              ROLE_NAME_SUFFIX="dev"
+              ;;
+            staging)
+              ROLE_ARN="$ROLE_STAGING_SECRET"
+              [[ -z "$ROLE_ARN" ]] && ROLE_ARN="$ROLE_STAGING_VAR"
+              ACCOUNT_ID="$ACCOUNT_STAGING"
+              ROLE_NAME_SUFFIX="staging"
+              ;;
+            prod)
+              ROLE_ARN="$ROLE_PROD_SECRET"
+              [[ -z "$ROLE_ARN" ]] && ROLE_ARN="$ROLE_PROD_VAR"
+              ACCOUNT_ID="$ACCOUNT_PROD"
+              ROLE_NAME_SUFFIX="prod"
+              ;;
+            *)
+              echo "Unsupported environment: $TARGET_ENV"
+              exit 1
+              ;;
+          esac
+
+          ROLE_ARN="$(echo "$ROLE_ARN" | tr -d '\r' | tr -d '\n' | xargs)"
+
+          if [[ "$ROLE_ARN" != arn:aws:iam::*:role/* && -n "$ACCOUNT_ID" ]]; then
+            ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/rupaya-github-oidc-${ROLE_NAME_SUFFIX}"
+          fi
+
+          if [[ "$ROLE_ARN" != arn:aws:iam::*:role/* ]]; then
+            echo "Invalid role ARN for $TARGET_ENV: $ROLE_ARN"
+            exit 1
+          fi
+
+          echo "role_arn=$ROLE_ARN" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ steps.role.outputs.role_arn }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolve API base URL
+        id: api
+        env:
+          TARGET_ENV: ${{ steps.target.outputs.environment }}
+          API_OVERRIDE: ${{ github.event.inputs.api_base_url }}
+        run: |
+          API_BASE_URL="$(echo "$API_OVERRIDE" | tr -d '\r' | tr -d '\n' | xargs)"
+
+          if [[ -z "$API_BASE_URL" ]]; then
+            case "$TARGET_ENV" in
+              dev)
+                if [[ -n "${DOMAIN_NAME_DEV}" ]]; then
+                  API_BASE_URL="https://dev.${DOMAIN_NAME_DEV}"
+                else
+                  LB_DNS=$(aws elbv2 describe-load-balancers --names rupaya-backend-dev-alb --region "$AWS_REGION" --query 'LoadBalancers[0].DNSName' --output text)
+                  API_BASE_URL="https://${LB_DNS}"
+                fi
+                ;;
+              staging)
+                LB_DNS=$(aws elbv2 describe-load-balancers --names rupaya-staging-alb --region "$AWS_REGION" --query 'LoadBalancers[0].DNSName' --output text)
+                API_BASE_URL="http://${LB_DNS}"
+                ;;
+              prod)
+                if [[ -n "${DOMAIN_NAME_DEV}" ]]; then
+                  API_BASE_URL="https://${DOMAIN_NAME_DEV}"
+                else
+                  LB_DNS=$(aws elbv2 describe-load-balancers --names rupaya-prod-alb --region "$AWS_REGION" --query 'LoadBalancers[0].DNSName' --output text)
+                  API_BASE_URL="https://${LB_DNS}"
+                fi
+                ;;
+            esac
+          fi
+
+          echo "api_base_url=$API_BASE_URL" >> "$GITHUB_OUTPUT"
+          echo "API_BASE_URL=$API_BASE_URL" >> "$GITHUB_ENV"
+          echo "Using API base URL: $API_BASE_URL"
+
+      - name: Health check
+        run: |
+          HEALTH_URL="${API_BASE_URL}/health"
+          echo "Checking ${HEALTH_URL}"
+
+          for i in {1..20}; do
+            CODE=$(curl -k -s -o /dev/null -w "%{http_code}" "$HEALTH_URL" || true)
+            if [[ "$CODE" == "200" ]]; then
+              echo "Health check passed"
+              exit 0
+            fi
+            echo "Attempt $i/20 -> HTTP $CODE"
+            sleep 10
+          done
+
+          echo "Health check failed at $HEALTH_URL"
+          exit 1
+
+      - name: Run all E2E test cases
+        working-directory: backend
+        env:
+          NODE_ENV: test
+          RUN_REMOTE_TESTS: 'true'
+          RUN_E2E_TESTS: 'true'
+          DATABASE_URL: postgres://test_user:test_password@localhost:5432/rupaya_test
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: test-secret-key-minimum-32-characters-long
+          REFRESH_TOKEN_SECRET: test-refresh-secret-key-minimum-32-chars
+          ENCRYPTION_KEY: test-encryption-key-minimum-32-chars
+        run: |
+          npm test -- \
+            __tests__/e2e/remote-api.test.js \
+            __tests__/e2e/deployment-features.test.js \
+            --maxWorkers=1 --json --outputFile=/tmp/e2e-results.json
+
+      - name: Upload E2E artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: post-deploy-e2e-${{ github.run_id }}
+          path: |
+            /tmp/e2e-results.json
+            backend/coverage/lcov.info
+          if-no-files-found: warn
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "Environment: ${{ steps.target.outputs.environment }}"
+          echo "API Base URL: ${{ steps.api.outputs.api_base_url }}"
+          echo "Workflow trigger: ${{ github.event_name }}"
