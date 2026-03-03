@@ -110,7 +110,8 @@ locals {
   effective_route53_zone_id = var.route53_zone_id != "" ? var.route53_zone_id : (
     local.create_route53_zone_for_dev ? aws_route53_zone.rupaya_dev[0].zone_id : ""
   )
-  create_acm_for_dev = var.create_acm_certificate && var.domain_name != "" && local.effective_route53_zone_id != ""
+  # ACM creation depends only on input variables (not on Route53 zone_id) to avoid circular dependency
+  create_acm_for_dev = var.create_acm_certificate && var.domain_name != ""
   effective_acm_certificate_arn = var.acm_certificate_arn != "" ? var.acm_certificate_arn : (
     local.create_acm_for_dev ? aws_acm_certificate_validation.rupaya_dev[0].certificate_arn : ""
   )
@@ -155,6 +156,9 @@ resource "aws_route53_record" "rupaya_dev_cert_validation" {
   type            = each.value.type
   ttl             = 60
   records         = [each.value.record]
+
+  # Explicit dependency: ensure Route53 zone is created before validation records
+  depends_on = [aws_route53_zone.rupaya_dev]
 }
 
 resource "aws_acm_certificate_validation" "rupaya_dev" {
