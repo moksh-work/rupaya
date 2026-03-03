@@ -251,6 +251,9 @@ jobs:
     env:
       ENVIRONMENT: ${{ needs.determine-environment.outputs.environment }}
       IMAGE_TAG: ${{ needs.determine-environment.outputs.image_tag }}
+      ACM_CERTIFICATE_ARN_DEV: ${{ vars.ACM_CERTIFICATE_ARN_DEV }}
+      DOMAIN_NAME_DEV: ${{ vars.DOMAIN_NAME_DEV }}
+      ROUTE53_ZONE_ID_DEV: ${{ vars.ROUTE53_ZONE_ID_DEV }}
     steps:
       - uses: actions/checkout@v4
 
