@@ -1,9 +1,9 @@
-name: 17 - Post-Deploy E2E Gate
+name: 16 - Post-Deploy E2E Gate
 
 on:
   workflow_run:
     workflows:
-      - "16 - Unified Multi-Environment Deployment"
+      - "15 - Unified Multi-Environment Deployment"
     types:
       - completed
   workflow_dispatch:
