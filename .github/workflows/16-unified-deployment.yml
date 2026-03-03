@@ -139,6 +139,7 @@ jobs:
       ACM_CERTIFICATE_ARN_DEV: ${{ vars.ACM_CERTIFICATE_ARN_DEV }}
       DOMAIN_NAME_DEV: ${{ vars.DOMAIN_NAME_DEV }}
       ROUTE53_ZONE_ID_DEV: ${{ vars.ROUTE53_ZONE_ID_DEV }}
+      ACM_CERTIFICATE_ARN_PROD: ${{ vars.ACM_CERTIFICATE_ARN_PROD }}
     steps:
       - uses: actions/checkout@v4
 
@@ -254,6 +255,7 @@ jobs:
       ACM_CERTIFICATE_ARN_DEV: ${{ vars.ACM_CERTIFICATE_ARN_DEV }}
       DOMAIN_NAME_DEV: ${{ vars.DOMAIN_NAME_DEV }}
       ROUTE53_ZONE_ID_DEV: ${{ vars.ROUTE53_ZONE_ID_DEV }}
+      ACM_CERTIFICATE_ARN_PROD: ${{ vars.ACM_CERTIFICATE_ARN_PROD }}
     steps:
       - uses: actions/checkout@v4
 
@@ -467,6 +469,13 @@ jobs:
                 -var="create_acm_certificate=true"
                 -var="create_route53_zone=true"
                 -var="domain_name=${DOMAIN_NAME}"
+              )
+            fi
+          elif [[ "$ENVIRONMENT" == "prod" ]]; then
+            ACM_CERT_ARN="$(echo "${ACM_CERTIFICATE_ARN_PROD}" | tr -d '\r' | tr -d '\n' | xargs)"
+            if [[ -n "$ACM_CERT_ARN" ]]; then
+              TF_APPLY_ARGS+=(
+                -var="certificate_arn=${ACM_CERT_ARN}"
               )
             fi
           fi

@@ -133,6 +133,7 @@ resource "aws_route53_zone" "rupaya_dev" {
 resource "aws_acm_certificate" "rupaya_dev" {
   count             = local.create_acm_for_dev ? 1 : 0
   domain_name       = var.domain_name
+  subject_alternative_names = ["*.${var.domain_name}"]
   validation_method = "DNS"
 
   lifecycle {
