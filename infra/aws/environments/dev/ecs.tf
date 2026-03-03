@@ -110,6 +110,7 @@ locals {
   effective_route53_zone_id = var.route53_zone_id != "" ? var.route53_zone_id : (
     local.create_route53_zone_for_dev ? aws_route53_zone.rupaya_dev[0].zone_id : ""
   )
+  create_route53_alias_records_for_dev = var.domain_name != "" && (var.route53_zone_id != "" || var.create_route53_zone)
   # ACM creation depends only on input variables (not on Route53 zone_id) to avoid circular dependency
   create_acm_for_dev = var.create_acm_certificate && var.domain_name != ""
   # Determine if HTTPS should be enabled based on input variables, not on validation status
@@ -172,7 +173,7 @@ resource "aws_acm_certificate_validation" "rupaya_dev" {
 }
 
 resource "aws_route53_record" "rupaya_dev_apex_alias" {
-  count   = local.effective_route53_zone_id != "" && var.domain_name != "" ? 1 : 0
+  count   = local.create_route53_alias_records_for_dev ? 1 : 0
   zone_id = local.effective_route53_zone_id
   name    = var.domain_name
   type    = "A"
@@ -185,7 +186,7 @@ resource "aws_route53_record" "rupaya_dev_apex_alias" {
 }
 
 resource "aws_route53_record" "rupaya_dev_wildcard_alias" {
-  count   = local.effective_route53_zone_id != "" && var.domain_name != "" ? 1 : 0
+  count   = local.create_route53_alias_records_for_dev ? 1 : 0
   zone_id = local.effective_route53_zone_id
   name    = "*.${var.domain_name}"
   type    = "A"
