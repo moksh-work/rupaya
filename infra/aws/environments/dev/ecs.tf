@@ -171,6 +171,32 @@ resource "aws_acm_certificate_validation" "rupaya_dev" {
   validation_record_fqdns = [for record in aws_route53_record.rupaya_dev_cert_validation : record.fqdn]
 }
 
+resource "aws_route53_record" "rupaya_dev_apex_alias" {
+  count   = local.effective_route53_zone_id != "" && var.domain_name != "" ? 1 : 0
+  zone_id = local.effective_route53_zone_id
+  name    = var.domain_name
+  type    = "A"
+
+  alias {
+    name                   = aws_lb.rupaya_backend_dev.dns_name
+    zone_id                = aws_lb.rupaya_backend_dev.zone_id
+    evaluate_target_health = true
+  }
+}
+
+resource "aws_route53_record" "rupaya_dev_wildcard_alias" {
+  count   = local.effective_route53_zone_id != "" && var.domain_name != "" ? 1 : 0
+  zone_id = local.effective_route53_zone_id
+  name    = "*.${var.domain_name}"
+  type    = "A"
+
+  alias {
+    name                   = aws_lb.rupaya_backend_dev.dns_name
+    zone_id                = aws_lb.rupaya_backend_dev.zone_id
+    evaluate_target_health = true
+  }
+}
+
 resource "aws_lb_listener" "rupaya_backend_dev" {
   load_balancer_arn = aws_lb.rupaya_backend_dev.arn
   port              = 80
