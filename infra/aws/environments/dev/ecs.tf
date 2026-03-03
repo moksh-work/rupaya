@@ -112,10 +112,13 @@ locals {
   )
   # ACM creation depends only on input variables (not on Route53 zone_id) to avoid circular dependency
   create_acm_for_dev = var.create_acm_certificate && var.domain_name != ""
+  # Determine if HTTPS should be enabled based on input variables, not on validation status
+  # This avoids circular dependency: HTTPS listener is created regardless of ACM validation state
+  https_enabled = var.acm_certificate_arn != "" || local.create_acm_for_dev
+  # Effective ARN is used for the listener after apply (once cert is validated)
   effective_acm_certificate_arn = var.acm_certificate_arn != "" ? var.acm_certificate_arn : (
-    local.create_acm_for_dev ? aws_acm_certificate_validation.rupaya_dev[0].certificate_arn : ""
+    local.create_acm_for_dev ? aws_acm_certificate.rupaya_dev[0].arn : ""
   )
-  https_enabled = local.effective_acm_certificate_arn != ""
 }
 
 resource "aws_route53_zone" "rupaya_dev" {
@@ -206,6 +209,9 @@ resource "aws_lb_listener" "rupaya_backend_dev_https" {
     type             = "forward"
     target_group_arn = aws_lb_target_group.rupaya_backend_dev.arn
   }
+
+  # Wait for ACM cert validation if creating a new cert
+  depends_on = [aws_acm_certificate_validation.rupaya_dev]
 }
 
 # ========== ECS SERVICE ==========
