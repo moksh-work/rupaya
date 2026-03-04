@@ -248,6 +248,8 @@ resource "aws_ecs_service" "rupaya_backend_dev" {
   cluster         = aws_ecs_cluster.rupaya_dev.id
   task_definition = aws_ecs_task_definition.rupaya_backend_dev.arn
   desired_count   = var.ecs_desired_count
+  deployment_minimum_healthy_percent = 0
+  deployment_maximum_percent         = 200
   health_check_grace_period_seconds = 120
   wait_for_steady_state             = true
   launch_type     = "FARGATE"
