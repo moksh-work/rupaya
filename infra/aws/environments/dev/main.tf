@@ -36,6 +36,21 @@ resource "random_password" "db_master_password" {
   special = false
 }
 
+resource "random_password" "jwt_secret" {
+  length  = 64
+  special = false
+}
+
+resource "random_password" "refresh_token_secret" {
+  length  = 64
+  special = false
+}
+
+resource "random_password" "encryption_key" {
+  length  = 64
+  special = false
+}
+
 locals {
   effective_db_master_password = var.db_master_password != "" ? var.db_master_password : random_password.db_master_password.result
 }
@@ -165,11 +180,11 @@ resource "aws_db_instance" "rupaya_postgres_dev" {
   engine_version = var.postgres_version
   instance_class = var.rds_instance_class
 
-  allocated_storage     = var.allocated_storage
-  storage_type          = "gp3"
-  storage_encrypted     = true
-  deletion_protection   = false
-  skip_final_snapshot   = true # For dev only; use snapshots in prod
+  allocated_storage   = var.allocated_storage
+  storage_type        = "gp3"
+  storage_encrypted   = true
+  deletion_protection = false
+  skip_final_snapshot = true # For dev only; use snapshots in prod
 
   db_name  = var.db_name
   username = var.db_master_username
@@ -180,8 +195,8 @@ resource "aws_db_instance" "rupaya_postgres_dev" {
   publicly_accessible    = true # Only for dev; keep private in prod
 
   backup_retention_period = 7
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "mon:04:00-mon:05:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "mon:04:00-mon:05:00"
 
   enabled_cloudwatch_logs_exports = ["postgresql"]
 
@@ -264,9 +279,9 @@ resource "aws_ecr_lifecycle_policy" "rupaya_backend" {
         rulePriority = 2
         description  = "Keep last 20 images"
         selection = {
-          tagStatus     = "any"
-          countType     = "imageCountMoreThan"
-          countNumber   = 20
+          tagStatus   = "any"
+          countType   = "imageCountMoreThan"
+          countNumber = 20
         }
         action = {
           type = "expire"

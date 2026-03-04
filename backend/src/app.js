@@ -114,6 +114,7 @@ const limiter = process.env.NODE_ENV === 'test'
   : rateLimit({
       windowMs: 15 * 60 * 1000, // 15 minutes
       max: 100, // limit each IP to 100 requests per windowMs
+      skip: (req) => req.path === '/health' || req.path === '/healthz',
       message: 'Too many requests from this IP, please try again later.'
     });
 
@@ -182,6 +183,10 @@ if (featureFlagsService && deploymentMetricsService) {
   // Admin Deployment Metrics Endpoints
   app.use('/api/admin/deployment', authMiddleware, deploymentMetricsRoutes(featureFlagsService, deploymentMetricsService));
 }
+
+app.get('/healthz', (req, res) => {
+  res.json({ status: 'OK' });
+});
 
 // Health Check - Enhanced with deployment metrics
 app.get('/health', async (req, res) => {

@@ -10,7 +10,19 @@ const authMiddleware = async (req, res, next) => {
     }
 
     const decoded = await AuthService.verifyToken(token);
-    req.user = decoded;
+    const normalizedUserId = decoded.userId || decoded.user_id || decoded.id || null;
+
+    req.user = {
+      ...decoded,
+      id: normalizedUserId,
+      userId: normalizedUserId,
+      user_id: normalizedUserId
+    };
+
+    if (!req.user.userId) {
+      return res.status(401).json({ error: 'Invalid token payload' });
+    }
+
     next();
   } catch (error) {
     res.status(401).json({ error: 'Invalid or expired token' });
