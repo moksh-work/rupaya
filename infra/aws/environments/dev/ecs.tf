@@ -58,9 +58,9 @@ resource "aws_ecs_task_definition" "rupaya_backend_dev" {
     healthCheck = {
       command     = ["CMD-SHELL", "curl -f http://localhost:3000/healthz || exit 1"]
       interval    = 30
-      timeout     = 5
-      retries     = 3
-      startPeriod = 60
+      timeout     = 10
+      retries     = 5
+      startPeriod = 180
     }
   }])
 
@@ -93,8 +93,8 @@ resource "aws_lb_target_group" "rupaya_backend_dev" {
 
   health_check {
     healthy_threshold   = 2
-    unhealthy_threshold = 2
-    timeout             = 3
+    unhealthy_threshold = 5
+    timeout             = 5
     interval            = 30
     path                = "/healthz"
     matcher             = "200"
@@ -132,10 +132,10 @@ resource "aws_route53_zone" "rupaya_dev" {
 }
 
 resource "aws_acm_certificate" "rupaya_dev" {
-  count             = local.create_acm_for_dev ? 1 : 0
-  domain_name       = var.domain_name
+  count                     = local.create_acm_for_dev ? 1 : 0
+  domain_name               = var.domain_name
   subject_alternative_names = ["*.${var.domain_name}"]
-  validation_method = "DNS"
+  validation_method         = "DNS"
 
   lifecycle {
     create_before_destroy = true
@@ -244,15 +244,15 @@ resource "aws_lb_listener" "rupaya_backend_dev_https" {
 
 # ========== ECS SERVICE ==========
 resource "aws_ecs_service" "rupaya_backend_dev" {
-  name            = "rupaya-backend-dev"
-  cluster         = aws_ecs_cluster.rupaya_dev.id
-  task_definition = aws_ecs_task_definition.rupaya_backend_dev.arn
-  desired_count   = var.ecs_desired_count
+  name                               = "rupaya-backend-dev"
+  cluster                            = aws_ecs_cluster.rupaya_dev.id
+  task_definition                    = aws_ecs_task_definition.rupaya_backend_dev.arn
+  desired_count                      = var.ecs_desired_count
   deployment_minimum_healthy_percent = 0
   deployment_maximum_percent         = 200
-  health_check_grace_period_seconds = 120
-  wait_for_steady_state             = true
-  launch_type     = "FARGATE"
+  health_check_grace_period_seconds  = 120
+  wait_for_steady_state              = true
+  launch_type                        = "FARGATE"
 
   deployment_circuit_breaker {
     enable   = true
