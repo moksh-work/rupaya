@@ -497,7 +497,13 @@ describeE2E('Feature Flags & Deployment E2E Tests', () => {
 
   // ========== User Journey Tests ==========
   describe('User Workflows with Feature Flags', () => {
-    const itIfAuth = (desc, fn) => testUser && accessToken ? it(desc, fn) : it.skip(desc, fn);
+    const itIfAuth = (desc, fn) => it(desc, async () => {
+      if (!testUser || !accessToken) {
+        throw new Error(`Missing authenticated test context for ${desc}`);
+      }
+
+      await fn();
+    });
 
     itIfAuth('should evaluate flags for user context', async () => {
       const response = await requestJson({
