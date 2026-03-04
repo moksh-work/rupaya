@@ -56,7 +56,7 @@ resource "aws_ecs_task_definition" "rupaya_backend_dev" {
     }
 
     healthCheck = {
-      command     = ["CMD-SHELL", "curl -f http://localhost:3000/health || exit 1"]
+      command     = ["CMD-SHELL", "curl -f http://localhost:3000/healthz || exit 1"]
       interval    = 30
       timeout     = 5
       retries     = 3
@@ -96,7 +96,7 @@ resource "aws_lb_target_group" "rupaya_backend_dev" {
     unhealthy_threshold = 2
     timeout             = 3
     interval            = 30
-    path                = "/health"
+    path                = "/healthz"
     matcher             = "200"
   }
 
