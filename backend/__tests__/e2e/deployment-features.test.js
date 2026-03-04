@@ -135,7 +135,6 @@ describeE2E('Feature Flags & Deployment E2E Tests', () => {
 
   const skipIfNoAccessToken = (testName) => {
     if (!accessToken) {
-      console.warn(`⚠️  No access token, skipping ${testName}`);
       return true;
     }
     return false;
@@ -161,10 +160,6 @@ describeE2E('Feature Flags & Deployment E2E Tests', () => {
       testUser = { email, password };
       accessToken = signupRes.body.accessToken || signupRes.body.token;
       refreshToken = signupRes.body.refreshToken;
-    } else if (signupRes.status === 429) {
-      console.warn('⚠️  Rate limit hit during signup - some tests will be skipped');
-    } else {
-      console.warn(`⚠️  Signup failed with status ${signupRes.status}`);
     }
   });
 
@@ -182,7 +177,6 @@ describeE2E('Feature Flags & Deployment E2E Tests', () => {
       const flags = normalizeFlags(response.body);
       expect(Array.isArray(flags)).toBe(true);
       if (flags.length === 0) {
-        console.warn('⚠️  No feature flags configured');
         return;
       }
 
@@ -202,7 +196,6 @@ describeE2E('Feature Flags & Deployment E2E Tests', () => {
       const flags = normalizeFlags(listRes.body);
       const firstFlag = flags[0];
       if (!firstFlag) {
-        console.warn('⚠️  No feature flag available for detail test');
         return;
       }
       expect(firstFlag.key).toBeDefined();
@@ -231,7 +224,6 @@ describeE2E('Feature Flags & Deployment E2E Tests', () => {
       const flags = normalizeFlags(listRes.body);
       const targetFlag = flags.find(f => f.type === 'boolean');
       if (!targetFlag) {
-        console.warn('⚠️  No boolean flag found for toggle test');
         return;
       }
 
@@ -284,7 +276,6 @@ describeE2E('Feature Flags & Deployment E2E Tests', () => {
       const flags = normalizeFlags(listRes.body);
       const targetFlag = flags[0];
       if (!targetFlag) {
-        console.warn('⚠️  No feature flag available for rollout test');
         return;
       }
 
@@ -318,7 +309,6 @@ describeE2E('Feature Flags & Deployment E2E Tests', () => {
       const flags = normalizeFlags(flagRes.body);
       const canaryFlag = flags.find(f => f.type === 'canary');
       if (!canaryFlag) {
-        console.warn('⚠️  No canary flag found');
         return;
       }
 
@@ -338,7 +328,6 @@ describeE2E('Feature Flags & Deployment E2E Tests', () => {
       const flags = normalizeFlags(flagRes.body);
       const canaryFlag = flags.find(f => f.type === 'canary');
       if (!canaryFlag || !Array.isArray(canaryFlag.stages) || canaryFlag.currentStage >= canaryFlag.stages.length - 1) {
-        console.warn('⚠️  Canary flag not suitable for stage advancement test');
         return;
       }
 
@@ -475,7 +464,6 @@ describeE2E('Feature Flags & Deployment E2E Tests', () => {
       const flags = normalizeFlags(flagRes.body);
       const experiments = flags.filter(f => f.type === 'experiment');
       if (experiments.length === 0) {
-        console.warn('⚠️  No experiments configured');
         return;
       }
 
@@ -535,11 +523,6 @@ describeE2E('Feature Flags & Deployment E2E Tests', () => {
     });
 
     itIfAuth('should create account with feature flags context', async () => {
-      if (!accessToken) {
-        console.warn('⚠️  No access token, skipping account creation test');
-        return;
-      }
-
       const response = await requestJson({
         method: 'POST',
         path: '/api/v1/accounts',
@@ -644,7 +627,6 @@ describeE2E('Feature Flags & Deployment E2E Tests', () => {
   describe('Integration Scenarios', () => {
     it('should complete user signup to account creation flow', async () => {
       if (!testUser) {
-        console.warn('⚠️  Test user not created, skipping flow test');
         return;
       }
 
