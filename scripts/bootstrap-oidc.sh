@@ -753,60 +753,6 @@ create_github_secret() {
 }
 
 # ============================================================================
-# Sync GitHub AWS Account Variables
-# ============================================================================
-
-sync_github_account_variables() {
-    log_info "Syncing GitHub AWS account variable(s) from current AWS identity..."
-
-    local account_id
-    account_id="${ACCOUNT_ID:-}"
-    if [ -z "$account_id" ] || [[ ! "$account_id" =~ ^[0-9]{12}$ ]]; then
-        account_id=$(get_aws_account_id)
-    fi
-
-    if [ -z "$account_id" ] || [[ ! "$account_id" =~ ^[0-9]{12}$ ]]; then
-        log_error "Could not determine a valid 12-digit AWS account ID for variable sync"
-        exit 1
-    fi
-
-    set_account_variable() {
-        local var_name="$1"
-        local expected_value="$2"
-        local current_value=""
-
-        log_info "Setting $var_name=$expected_value..."
-        gh variable set "$var_name" \
-            --repo "$GITHUB_ORG/$GITHUB_REPO" \
-            --body "$expected_value"
-
-        current_value=$(gh variable get "$var_name" --repo "$GITHUB_ORG/$GITHUB_REPO" 2>/dev/null || true)
-        current_value=$(echo "$current_value" | tr -d '\r' | xargs)
-
-        if [ "$current_value" = "$expected_value" ]; then
-            log_success "$var_name synced to $expected_value"
-        else
-            log_error "$var_name verification failed (expected: $expected_value, got: $current_value)"
-            exit 1
-        fi
-    }
-
-    if [ "$DEPLOY_ENVIRONMENTS" = "all" ] || [ "$DEPLOY_ENVIRONMENTS" = "development" ]; then
-        set_account_variable "AWS_ACCOUNT_ID_DEV" "$account_id"
-    fi
-
-    if [ "$DEPLOY_ENVIRONMENTS" = "all" ] || [ "$DEPLOY_ENVIRONMENTS" = "staging" ]; then
-        set_account_variable "AWS_ACCOUNT_ID_STAGING" "$account_id"
-    fi
-
-    if [ "$DEPLOY_ENVIRONMENTS" = "all" ] || [ "$DEPLOY_ENVIRONMENTS" = "production" ]; then
-        set_account_variable "AWS_ACCOUNT_ID_PROD" "$account_id"
-    fi
-
-    echo ""
-}
-
-# ============================================================================
 # Create GitHub Environments & Variables
 # ============================================================================
 
@@ -1061,7 +1007,6 @@ main() {
         # Create mode (default)
         apply_terraform
         create_github_secret
-        sync_github_account_variables
         create_github_environments
         test_oidc_auth
         print_summary
