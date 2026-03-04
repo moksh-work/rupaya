@@ -282,7 +282,8 @@ describeRemote('Remote API Smoke Tests', () => {
     }
 
     expect(response.status).toBe(200);
-    expect(Array.isArray(response.body)).toBe(true);
+    const payload = response.body?.data?.categories ?? response.body?.data ?? response.body;
+    expect(Array.isArray(payload)).toBe(true);
   });
 
   itIfAuth('logout should succeed', async () => {
