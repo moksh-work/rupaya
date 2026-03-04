@@ -249,13 +249,7 @@ resource "aws_ecs_service" "rupaya_backend_dev" {
   task_definition = aws_ecs_task_definition.rupaya_backend_dev.arn
   desired_count   = var.ecs_desired_count
   health_check_grace_period_seconds = 120
-  wait_for_steady_state             = true
   launch_type     = "FARGATE"
-
-  deployment_circuit_breaker {
-    enable   = true
-    rollback = true
-  }
 
   network_configuration {
     subnets          = data.aws_subnets.default.ids
