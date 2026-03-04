@@ -55,13 +55,6 @@ resource "aws_ecs_task_definition" "rupaya_backend_dev" {
       }
     }
 
-    healthCheck = {
-      command     = ["CMD-SHELL", "curl -f http://localhost:3000/healthz || exit 1"]
-      interval    = 30
-      timeout     = 10
-      retries     = 5
-      startPeriod = 180
-    }
   }])
 
   tags = {
