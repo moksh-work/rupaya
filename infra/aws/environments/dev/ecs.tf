@@ -36,6 +36,18 @@ resource "aws_ecs_task_definition" "rupaya_backend_dev" {
         {
           name  = "PORT"
           value = tostring(var.container_port)
+        },
+        {
+          name  = "JWT_SECRET"
+          value = random_password.jwt_secret.result
+        },
+        {
+          name  = "REFRESH_TOKEN_SECRET"
+          value = random_password.refresh_token_secret.result
+        },
+        {
+          name  = "ENCRYPTION_KEY"
+          value = random_password.encryption_key.result
         }
       ],
       [

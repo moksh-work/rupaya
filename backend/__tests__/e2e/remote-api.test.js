@@ -85,7 +85,13 @@ describeRemote('Remote API Smoke Tests', () => {
   let password;
   let authUnavailable = false;
 
-  const itIfAuth = (name, fn) => (accessToken ? it(name, fn) : it.skip(name, fn));
+  const itIfAuth = (name, fn) => it(name, async () => {
+    if (!accessToken) {
+      throw new Error(`Missing access token for ${name}. Set API_TEST_ACCESS_TOKEN or ensure signup succeeds.`);
+    }
+
+    await fn();
+  });
 
   it('health check should return OK', async () => {
     const response = await requestJson({ method: 'GET', path: '/health' });
@@ -105,6 +111,7 @@ describeRemote('Remote API Smoke Tests', () => {
       accessToken = process.env.API_TEST_ACCESS_TOKEN;
       refreshToken = process.env.API_TEST_REFRESH_TOKEN;
       userEmail = process.env.API_TEST_EMAIL || 'preprovided@example.com';
+      password = process.env.API_TEST_PASSWORD;
       return;
     }
 
@@ -123,17 +130,17 @@ describeRemote('Remote API Smoke Tests', () => {
 
     if (response.status === 429) {
       authUnavailable = true;
-      return;
+      throw new Error('Signup rate-limited (429). Provide API_TEST_ACCESS_TOKEN/API_TEST_EMAIL/API_TEST_PASSWORD for CI.');
     }
 
     if (response.status === 0) {
       authUnavailable = true;
-      return;
+      throw new Error('Signup request timed out. Provide API_TEST_ACCESS_TOKEN/API_TEST_EMAIL/API_TEST_PASSWORD for CI.');
     }
 
     if (response.status === 400) {
       authUnavailable = true;
-      return;
+      throw new Error(`Signup returned 400: ${JSON.stringify(response.body)}`);
     }
 
     expect(response.status).toBe(200);
@@ -145,6 +152,10 @@ describeRemote('Remote API Smoke Tests', () => {
   });
 
   itIfAuth('signin should succeed', async () => {
+    if (process.env.API_TEST_ACCESS_TOKEN && (!userEmail || !password)) {
+      throw new Error('API_TEST_ACCESS_TOKEN is set but API_TEST_EMAIL/API_TEST_PASSWORD are missing for signin validation.');
+    }
+
     const response = await requestJson({
       method: 'POST',
       path: '/api/v1/auth/signin',
@@ -277,7 +288,7 @@ describeRemote('Remote API Smoke Tests', () => {
   afterAll(() => {
     if (!accessToken && authUnavailable) {
       // eslint-disable-next-line no-console
-      console.warn('Auth tests skipped: auth rate limit hit. Provide API_TEST_ACCESS_TOKEN to run full suite.');
+      console.warn('Auth tests could not complete. Provide API_TEST_ACCESS_TOKEN/API_TEST_EMAIL/API_TEST_PASSWORD to run full suite in CI.');
     }
   });
 });
