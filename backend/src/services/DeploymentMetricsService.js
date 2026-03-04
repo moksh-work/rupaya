@@ -247,7 +247,7 @@ class DeploymentMetricsService extends EventEmitter {
     const latest = recentMetrics[recentMetrics.length - 1];
 
     return {
-      status: this.isHealthy(latest) ? 'healthy' : 'degraded',
+      status: this.getHealthStatus(latest) ? 'healthy' : 'degraded',
       errorRate: latest.errorRate,
       p99ResponseTime: latest.p99ResponseTime,
       requestsPerSecond: latest.requestsPerSecond,
