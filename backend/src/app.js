@@ -184,10 +184,6 @@ if (featureFlagsService && deploymentMetricsService) {
   app.use('/api/admin/deployment', authMiddleware, deploymentMetricsRoutes(featureFlagsService, deploymentMetricsService));
 }
 
-app.get('/healthz', (req, res) => {
-  res.json({ status: 'OK' });
-});
-
 // Health Check - Enhanced with deployment metrics
 app.get('/health', async (req, res) => {
   try {
