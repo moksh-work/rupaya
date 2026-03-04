@@ -172,7 +172,7 @@ jobs:
 
       - name: Health check
         run: |
-          HEALTH_URL="${API_BASE_URL}/health"
+          HEALTH_URL="${API_BASE_URL}/healthz"
           echo "Checking ${HEALTH_URL}"
 
           for i in {1..20}; do
