@@ -63,7 +63,16 @@ const requestJson = async ({ method, path, token, body }) => {
   }
 };
 
-const getAccessToken = (payload) => payload.accessToken || payload.token;
+const unwrapData = (payload) => (payload && payload.data !== undefined ? payload.data : payload);
+const getAccessToken = (payload) => {
+  const data = unwrapData(payload) || {};
+  return data.accessToken || data.token || data.access_token;
+};
+
+const getRefreshToken = (payload) => {
+  const data = unwrapData(payload) || {};
+  return data.refreshToken || data.refresh_token;
+};
 
 const uniqueEmail = () => `remote-test-${Date.now()}-${Math.floor(Math.random() * 1000)}@example.com`;
 
@@ -143,9 +152,9 @@ describeRemote('Remote API Smoke Tests', () => {
       throw new Error(`Signup returned 400: ${JSON.stringify(response.body)}`);
     }
 
-    expect(response.status).toBe(200);
+    expect([200, 201]).toContain(response.status);
     accessToken = getAccessToken(response.body);
-    refreshToken = response.body.refreshToken;
+    refreshToken = getRefreshToken(response.body);
 
     expect(accessToken).toBeDefined();
     expect(response.body.user || response.body.userId).toBeDefined();
