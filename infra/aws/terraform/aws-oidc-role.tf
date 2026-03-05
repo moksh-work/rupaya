@@ -262,9 +262,12 @@ data "aws_iam_policy_document" "terraform_state_policy" {
     actions = [
       "s3:CreateBucket",
       "s3:ListBucket",
+      "s3:ListBucketVersions",
       "s3:GetObject",
       "s3:PutObject",
       "s3:DeleteObject",
+      "s3:DeleteObjectVersion",
+      "s3:DeleteBucket",
       "s3:PutBucketVersioning",
       "s3:PutBucketEncryption"
     ]
@@ -282,7 +285,8 @@ data "aws_iam_policy_document" "terraform_state_policy" {
       "dynamodb:DescribeTable",
       "dynamodb:GetItem",
       "dynamodb:PutItem",
-      "dynamodb:DeleteItem"
+      "dynamodb:DeleteItem",
+      "dynamodb:DeleteTable"
     ]
     resources = [
       "arn:aws:dynamodb:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:table/rupaya-terraform-lock*"
