@@ -71,10 +71,13 @@ jobs:
         run: |
           set -euo pipefail
 
+          echo "proceed=false" >> "$GITHUB_OUTPUT"
+
           EXPECTED_CONFIRM="DESTROY-${ENVIRONMENT^^}"
           if [[ "$CONFIRMATION" != "$EXPECTED_CONFIRM" ]]; then
-            echo "Invalid confirmation phrase. Expected: $EXPECTED_CONFIRM"
-            exit 1
+            echo "Confirmation guard blocked destroy. Expected: $EXPECTED_CONFIRM"
+            echo "No infrastructure changes were made."
+            exit 0
           fi
 
           ROLE_ARN=""
@@ -146,23 +149,27 @@ jobs:
 
           echo "Resolved role ARN: $ROLE_ARN"
           echo "Resolved account id: $ROLE_ACCOUNT_ID"
+          echo "proceed=true" >> "$GITHUB_OUTPUT"
           echo "role_arn=$ROLE_ARN" >> "$GITHUB_OUTPUT"
           echo "account_id=$ROLE_ACCOUNT_ID" >> "$GITHUB_OUTPUT"
           echo "aws_region=$AWS_REGION_INPUT" >> "$GITHUB_OUTPUT"
 
       - name: Configure AWS credentials
+        if: ${{ steps.resolve.outputs.proceed == 'true' }}
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ steps.resolve.outputs.role_arn }}
           aws-region: ${{ steps.resolve.outputs.aws_region }}
 
       - name: Setup Terraform
+        if: ${{ steps.resolve.outputs.proceed == 'true' }}
         uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: 1.6.6
           terraform_wrapper: false
 
       - name: Terraform destroy
+        if: ${{ steps.resolve.outputs.proceed == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -210,7 +217,7 @@ jobs:
           terraform apply -auto-approve tfdestroy
 
       - name: Optional cleanup Terraform backend
-        if: ${{ github.event.inputs.delete_state_backend == 'true' }}
+        if: ${{ steps.resolve.outputs.proceed == 'true' && github.event.inputs.delete_state_backend == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -256,7 +263,15 @@ jobs:
           fi
 
       - name: Summary
+        if: always()
         run: |
+          if [[ "${{ steps.resolve.outputs.proceed }}" != "true" ]]; then
+            echo "⚠️ Destroy workflow skipped by confirmation guard"
+            echo "Expected confirmation: DESTROY-${ENVIRONMENT^^}"
+            echo "Provided confirmation: $CONFIRMATION"
+            exit 0
+          fi
+
           echo "✅ Destroy workflow completed"
           echo "Environment: $ENVIRONMENT"
           echo "AWS account: ${{ steps.resolve.outputs.account_id }}"
