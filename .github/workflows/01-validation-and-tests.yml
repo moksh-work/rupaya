@@ -17,6 +17,7 @@ on:
   pull_request:
     branches:
       - main
+      - deployment
     paths-ignore:
       - 'docs/**'
       - '**/*.md'
