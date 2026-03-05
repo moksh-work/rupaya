@@ -1,7 +1,7 @@
 # Multi-stage Dockerfile for production and development flexibility
 
 # ===== STAGE 1: Builder =====
-FROM node:18-alpine AS builder
+FROM node:20.19-alpine AS builder
 
 WORKDIR /app
 
@@ -16,7 +16,7 @@ RUN npm install --only=production && \
     npm cache clean --force
 
 # ===== STAGE 2: Development =====
-FROM node:18-alpine AS development
+FROM node:20.19-alpine AS development
 
 WORKDIR /app
 
@@ -43,7 +43,7 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 CMD ["npm", "run", "dev"]
 
 # ===== STAGE 3: Production =====
-FROM node:18-alpine AS production
+FROM node:20.19-alpine AS production
 
 WORKDIR /app
 

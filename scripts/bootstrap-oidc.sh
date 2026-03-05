@@ -441,6 +441,65 @@ get_aws_account_id() {
     fi
 }
 
+get_github_repo_variable() {
+    local var_name="$1"
+
+    if [ -z "$var_name" ] || [ -z "$GITHUB_ORG" ] || [ -z "$GITHUB_REPO" ]; then
+        return 0
+    fi
+
+    gh variable get "$var_name" --repo "$GITHUB_ORG/$GITHUB_REPO" --json value --jq '.value' 2>/dev/null | tr -d '\r' | xargs
+}
+
+validate_target_account_alignment() {
+    local current_account="$1"
+    local expected_account=""
+    local expected_var_name=""
+
+    if [ -z "$current_account" ]; then
+        return 0
+    fi
+
+    case "$DEPLOY_ENVIRONMENTS" in
+        development)
+            expected_var_name="AWS_ACCOUNT_ID_DEV"
+            expected_account=$(get_github_repo_variable "$expected_var_name")
+            ;;
+        staging)
+            expected_var_name="AWS_ACCOUNT_ID_STAGING"
+            expected_account=$(get_github_repo_variable "$expected_var_name")
+            ;;
+        production)
+            expected_var_name="AWS_ACCOUNT_ID_PROD"
+            expected_account=$(get_github_repo_variable "$expected_var_name")
+            ;;
+        all)
+            log_warn "Skipping strict account alignment check for --env=all (multiple target accounts possible)"
+            return 0
+            ;;
+        *)
+            return 0
+            ;;
+    esac
+
+    if [ -z "$expected_account" ]; then
+        log_warn "GitHub variable $expected_var_name is not set; cannot validate account alignment"
+        return 0
+    fi
+
+    if [ "$expected_account" != "$current_account" ]; then
+        log_warn "AWS account mismatch detected"
+        echo "  Selected environment : $DEPLOY_ENVIRONMENTS"
+        echo "  Current AWS account : $current_account"
+        echo "  Existing value      : $expected_account ($expected_var_name)"
+        echo ""
+        echo "Proceeding with current AWS credentials. GitHub secrets/variables will be refreshed to $current_account."
+        return 0
+    fi
+
+    log_success "Account alignment check passed ($current_account matches $expected_var_name)"
+}
+
 reconcile_terraform_state_account() {
     local current_account="$1"
 
@@ -700,55 +759,101 @@ apply_terraform() {
 
 create_github_secret() {
     log_info "Creating GitHub repository secret(s) for selected environment(s)..."
+
+    refresh_github_secret() {
+        local secret_name="$1"
+        local secret_value="$2"
+
+        if [ -z "$secret_name" ] || [ -z "$secret_value" ]; then
+            log_error "Secret name/value missing for refresh"
+            exit 1
+        fi
+
+        if gh secret list --repo "$GITHUB_ORG/$GITHUB_REPO" 2>/dev/null | grep -q "$secret_name"; then
+            log_warn "Secret $secret_name already exists, deleting stale value before update..."
+            gh secret delete "$secret_name" --repo "$GITHUB_ORG/$GITHUB_REPO" 2>/dev/null || true
+        fi
+
+        echo "$secret_value" | gh secret set "$secret_name" \
+            --repo "$GITHUB_ORG/$GITHUB_REPO" \
+            --body -
+        log_success "$secret_name synced"
+    }
     
     # Development secret
     if [ "$DEPLOY_ENVIRONMENTS" = "all" ] || [ "$DEPLOY_ENVIRONMENTS" = "development" ]; then
         log_info "Creating AWS_OIDC_ROLE_ARN_DEV..."
-        if gh secret list --repo "$GITHUB_ORG/$GITHUB_REPO" 2>/dev/null | grep -q AWS_OIDC_ROLE_ARN_DEV; then
-            log_warn "Secret AWS_OIDC_ROLE_ARN_DEV already exists, updating..."
-        fi
         if ! is_valid_role_arn "$OIDC_ROLE_ARN_DEV"; then
             log_error "Refusing to store invalid AWS_OIDC_ROLE_ARN_DEV value: $OIDC_ROLE_ARN_DEV"
             exit 1
         fi
-        echo "$OIDC_ROLE_ARN_DEV" | gh secret set AWS_OIDC_ROLE_ARN_DEV \
-            --repo "$GITHUB_ORG/$GITHUB_REPO" \
-            --body -
-        log_success "AWS_OIDC_ROLE_ARN_DEV created"
+        refresh_github_secret "AWS_OIDC_ROLE_ARN_DEV" "$OIDC_ROLE_ARN_DEV"
     fi
     
     # Staging secret
     if [ "$DEPLOY_ENVIRONMENTS" = "all" ] || [ "$DEPLOY_ENVIRONMENTS" = "staging" ]; then
         log_info "Creating AWS_OIDC_ROLE_ARN_STAGING..."
-        if gh secret list --repo "$GITHUB_ORG/$GITHUB_REPO" 2>/dev/null | grep -q AWS_OIDC_ROLE_ARN_STAGING; then
-            log_warn "Secret AWS_OIDC_ROLE_ARN_STAGING already exists, updating..."
-        fi
         if ! is_valid_role_arn "$OIDC_ROLE_ARN_STAGING"; then
             log_error "Refusing to store invalid AWS_OIDC_ROLE_ARN_STAGING value: $OIDC_ROLE_ARN_STAGING"
             exit 1
         fi
-        echo "$OIDC_ROLE_ARN_STAGING" | gh secret set AWS_OIDC_ROLE_ARN_STAGING \
-            --repo "$GITHUB_ORG/$GITHUB_REPO" \
-            --body -
-        log_success "AWS_OIDC_ROLE_ARN_STAGING created"
+        refresh_github_secret "AWS_OIDC_ROLE_ARN_STAGING" "$OIDC_ROLE_ARN_STAGING"
     fi
     
     # Production secret
     if [ "$DEPLOY_ENVIRONMENTS" = "all" ] || [ "$DEPLOY_ENVIRONMENTS" = "production" ]; then
         log_info "Creating AWS_OIDC_ROLE_ARN_PROD..."
-        if gh secret list --repo "$GITHUB_ORG/$GITHUB_REPO" 2>/dev/null | grep -q AWS_OIDC_ROLE_ARN_PROD; then
-            log_warn "Secret AWS_OIDC_ROLE_ARN_PROD already exists, updating..."
-        fi
         if ! is_valid_role_arn "$OIDC_ROLE_ARN_PROD"; then
             log_error "Refusing to store invalid AWS_OIDC_ROLE_ARN_PROD value: $OIDC_ROLE_ARN_PROD"
             exit 1
         fi
-        echo "$OIDC_ROLE_ARN_PROD" | gh secret set AWS_OIDC_ROLE_ARN_PROD \
-            --repo "$GITHUB_ORG/$GITHUB_REPO" \
-            --body -
-        log_success "AWS_OIDC_ROLE_ARN_PROD created"
+        refresh_github_secret "AWS_OIDC_ROLE_ARN_PROD" "$OIDC_ROLE_ARN_PROD"
     fi
     
+    echo ""
+}
+
+sync_github_account_variables() {
+    log_info "Syncing GitHub repository AWS account variable(s)..."
+
+    sync_repo_variable() {
+        local var_name="$1"
+        local expected_value="$2"
+        local current_value
+
+        if [ -z "$var_name" ] || [ -z "$expected_value" ]; then
+            log_error "Variable name/value missing for sync"
+            exit 1
+        fi
+
+        current_value=$(get_github_repo_variable "$var_name")
+
+        if [ -n "$current_value" ] && [ "$current_value" != "$expected_value" ]; then
+            log_warn "Variable $var_name has stale value ($current_value), deleting before update..."
+            gh variable delete "$var_name" --repo "$GITHUB_ORG/$GITHUB_REPO" 2>/dev/null || true
+            current_value=""
+        fi
+
+        if [ -z "$current_value" ]; then
+            gh variable set "$var_name" --repo "$GITHUB_ORG/$GITHUB_REPO" --body "$expected_value"
+            log_success "$var_name synced to $expected_value"
+        else
+            log_success "$var_name already up to date ($expected_value)"
+        fi
+    }
+
+    if [ "$DEPLOY_ENVIRONMENTS" = "all" ] || [ "$DEPLOY_ENVIRONMENTS" = "development" ]; then
+        sync_repo_variable "AWS_ACCOUNT_ID_DEV" "$ACCOUNT_ID"
+    fi
+
+    if [ "$DEPLOY_ENVIRONMENTS" = "all" ] || [ "$DEPLOY_ENVIRONMENTS" = "staging" ]; then
+        sync_repo_variable "AWS_ACCOUNT_ID_STAGING" "$ACCOUNT_ID"
+    fi
+
+    if [ "$DEPLOY_ENVIRONMENTS" = "all" ] || [ "$DEPLOY_ENVIRONMENTS" = "production" ]; then
+        sync_repo_variable "AWS_ACCOUNT_ID_PROD" "$ACCOUNT_ID"
+    fi
+
     echo ""
 }
 
@@ -997,6 +1102,7 @@ main() {
     check_github_auth
     detect_github_org_repo
     select_environment
+    validate_target_account_alignment "$ACCOUNT_ID"
     
     if [ "$DESTROY_MODE" = true ]; then
         # Destroy mode
@@ -1007,6 +1113,7 @@ main() {
         # Create mode (default)
         apply_terraform
         create_github_secret
+        sync_github_account_variables
         create_github_environments
         test_oidc_auth
         print_summary

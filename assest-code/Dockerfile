@@ -1,7 +1,7 @@
 # Multi-stage Dockerfile for RUPAYA Backend
 
 # Build Stage
-FROM node:18-alpine AS builder
+FROM node:20.19-alpine AS builder
 
 WORKDIR /app
 
@@ -20,7 +20,7 @@ COPY migrations ./migrations
 RUN npm prune --production
 
 # Final Stage - Minimal image
-FROM node:18-alpine
+FROM node:20.19-alpine
 
 WORKDIR /app
 
