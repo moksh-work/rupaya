@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - deployment
+      - development
   workflow_dispatch:
     inputs:
       environment:
@@ -33,7 +34,7 @@ jobs:
   determine-environment:
     name: Determine Environment
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/deployment')
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref == 'refs/heads/deployment' || github.ref == 'refs/heads/development'))
     outputs:
       environment: ${{ steps.set.outputs.environment }}
       deploy: ${{ steps.set.outputs.deploy }}
@@ -53,7 +54,7 @@ jobs:
             DEPLOY="true"
             BRANCH="${{ github.ref_name }}"
             SHA="${{ github.sha }}"
-          elif [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/deployment" ]]; then
+          elif [[ "${{ github.event_name }}" == "push" && ("${{ github.ref }}" == "refs/heads/deployment" || "${{ github.ref }}" == "refs/heads/development") ]]; then
             ENV="dev"
             DEPLOY="true"
             BRANCH="${{ github.ref_name }}"
