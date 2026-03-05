@@ -185,9 +185,12 @@ data "aws_iam_policy_document" "ecr_policy" {
       "ecr:CompleteLayerUpload",
       "ecr:BatchGetImage",
       "ecr:GetDownloadUrlForLayer",
+      "ecr:ListImages",
+      "ecr:BatchDeleteImage",
       "ecr:GetLifecyclePolicy",
       "ecr:PutLifecyclePolicy",
-      "ecr:DeleteLifecyclePolicy"
+      "ecr:DeleteLifecyclePolicy",
+      "ecr:DeleteRepository"
     ]
     resources = [
       "arn:aws:ecr:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:repository/rupaya*"
