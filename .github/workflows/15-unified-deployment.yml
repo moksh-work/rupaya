@@ -419,6 +419,11 @@ jobs:
           terraform_wrapper: false
 
       - name: Terraform init/validate/apply
+        env:
+          TF_VAR_db_master_password: ${{ secrets.DB_MASTER_PASSWORD }}
+          TF_VAR_redis_auth_token: ${{ secrets.REDIS_AUTH_TOKEN }}
+          TF_VAR_jwt_secret: ${{ secrets.JWT_SECRET }}
+          TF_VAR_jwt_refresh_secret: ${{ secrets.JWT_REFRESH_SECRET }}
         run: |
           cd "infra/aws/environments/$ENVIRONMENT"
 
@@ -462,6 +467,20 @@ jobs:
             -backend-config="region=us-east-1" \
             -backend-config="dynamodb_table=${TFSTATE_DDB_TABLE}" \
             -backend-config="encrypt=true"
+
+          if [[ "$ENVIRONMENT" == "staging" || "$ENVIRONMENT" == "prod" ]]; then
+            missing_vars=()
+            [[ -z "$TF_VAR_db_master_password" ]] && missing_vars+=("DB_MASTER_PASSWORD")
+            [[ -z "$TF_VAR_redis_auth_token" ]] && missing_vars+=("REDIS_AUTH_TOKEN")
+            [[ -z "$TF_VAR_jwt_secret" ]] && missing_vars+=("JWT_SECRET")
+            [[ -z "$TF_VAR_jwt_refresh_secret" ]] && missing_vars+=("JWT_REFRESH_SECRET")
+
+            if [[ ${#missing_vars[@]} -gt 0 ]]; then
+              echo "Missing required environment secrets for $ENVIRONMENT: ${missing_vars[*]}"
+              echo "Add these secrets to GitHub Environment '$ENVIRONMENT'."
+              exit 1
+            fi
+          fi
 
           if [[ "$ENVIRONMENT" == "dev" ]]; then
             VPC_ID=$(aws ec2 describe-vpcs --filters Name=isDefault,Values=true --query 'Vpcs[0].VpcId' --output text 2>/dev/null || true)
