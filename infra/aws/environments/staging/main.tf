@@ -199,7 +199,6 @@ resource "aws_rds_cluster" "staging" {
   preferred_maintenance_window = "mon:04:00-mon:05:00"
   
   enabled_cloudwatch_logs_exports = ["postgresql"]
-  publicly_accessible             = false
   skip_final_snapshot             = false
   final_snapshot_identifier       = "rupaya-staging-final-snapshot-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
   
@@ -215,6 +214,7 @@ resource "aws_rds_cluster_instance" "staging" {
   instance_class     = var.rds_instance_class
   engine             = aws_rds_cluster.staging.engine
   engine_version     = aws_rds_cluster.staging.engine_version
+  publicly_accessible = false
   
   monitoring_interval = 60
   monitoring_role_arn = aws_iam_role.rds_monitoring.arn
@@ -236,7 +236,8 @@ resource "aws_elasticache_subnet_group" "staging" {
 }
 
 resource "aws_elasticache_replication_group" "staging" {
-  replication_group_description = "Staging Redis cluster for Rupaya"
+  replication_group_id          = "rupaya-staging"
+  description                   = "Staging Redis cluster for Rupaya"
   engine                        = "redis"
   engine_version                = var.redis_version
   node_type                     = var.redis_node_type
@@ -250,7 +251,6 @@ resource "aws_elasticache_replication_group" "staging" {
   multi_az_enabled              = true
   at_rest_encryption_enabled    = true
   transit_encryption_enabled    = true
-  auth_token_enabled            = true
   auth_token                    = var.redis_auth_token
   
   snapshot_retention_limit      = 7
