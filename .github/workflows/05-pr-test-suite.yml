@@ -319,17 +319,46 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Resolve AWS role ARN
+        id: role
+        env:
+          ACCOUNT_DEV: ${{ vars.AWS_ACCOUNT_ID_DEV }}
+        run: |
+          ROLE_ARN="$(echo "${AWS_ROLE_ARN}" | tr -d '\r' | tr -d '\n' | xargs)"
+          ROLE_NAME="rupaya-github-oidc-dev"
+
+          if [[ -n "$ROLE_ARN" && "$ROLE_ARN" != arn:aws:iam::*:role/* ]]; then
+            ROLE_NAME="$ROLE_ARN"
+            ROLE_ARN=""
+          fi
+
+          if [[ -z "$ROLE_ARN" && -n "$ACCOUNT_DEV" ]]; then
+            ROLE_ARN="arn:aws:iam::${ACCOUNT_DEV}:role/${ROLE_NAME}"
+          fi
+
+          if [[ "$ROLE_ARN" == arn:aws:iam::*:role/* ]]; then
+            echo "deploy_enabled=true" >> "$GITHUB_OUTPUT"
+            echo "role_arn=$ROLE_ARN" >> "$GITHUB_OUTPUT"
+          else
+            echo "deploy_enabled=false" >> "$GITHUB_OUTPUT"
+            echo "role_arn=" >> "$GITHUB_OUTPUT"
+            echo "Skipping deploy: no valid AWS role ARN available"
+          fi
+
       - name: Configure AWS credentials (OIDC)
+        if: steps.role.outputs.deploy_enabled == 'true'
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          role-to-assume: ${{ steps.role.outputs.role_arn }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
+        if: steps.role.outputs.deploy_enabled == 'true'
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build and push development image
+        if: steps.role.outputs.deploy_enabled == 'true'
         uses: docker/build-push-action@v5
         with:
           context: ./backend
@@ -339,6 +368,7 @@ jobs:
             ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:dev-${{ github.sha }}
 
       - name: Resolve ECS target
+        if: steps.role.outputs.deploy_enabled == 'true'
         id: ecs
         run: |
           CLUSTER="${{ vars.DEV_ECS_CLUSTER }}"
@@ -352,12 +382,14 @@ jobs:
           echo "task_definition=$TASK_DEF" >> "$GITHUB_OUTPUT"
 
       - name: Download current task definition
+        if: steps.role.outputs.deploy_enabled == 'true'
         run: |
           aws ecs describe-task-definition \
             --task-definition "${{ steps.ecs.outputs.task_definition }}" \
             --query taskDefinition > task-definition.json
 
       - name: Render task definition
+        if: steps.role.outputs.deploy_enabled == 'true'
         id: task-def
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
@@ -366,12 +398,17 @@ jobs:
           image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:dev-${{ github.sha }}
 
       - name: Deploy ECS service
+        if: steps.role.outputs.deploy_enabled == 'true'
         uses: aws-actions/amazon-ecs-deploy-task-definition@v1
         with:
           task-definition: ${{ steps.task-def.outputs.task-definition }}
           cluster: ${{ steps.ecs.outputs.cluster }}
           service: ${{ steps.ecs.outputs.service }}
           wait-for-service-stability: true
+
+      - name: Mark deploy skipped when role missing
+        if: steps.role.outputs.deploy_enabled != 'true'
+        run: echo "Deploy stage skipped because AWS role is not configured for PR context"
 
   endpoint-tests-development:
     name: Development Endpoint Tests
