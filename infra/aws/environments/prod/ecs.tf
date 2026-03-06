@@ -11,7 +11,6 @@ resource "aws_lb" "prod" {
 
   enable_deletion_protection = true
   enable_http2               = true
-  enable_http_draining       = true
   idle_timeout               = 60
   enable_cross_zone_load_balancing = true
 
@@ -239,13 +238,12 @@ resource "aws_ecs_service" "prod" {
     container_port   = 3000
   }
 
-  deployment_configuration {
-    maximum_percent         = 200
-    minimum_healthy_percent = 100
-    deployment_circuit_breaker {
-      enable   = true
-      rollback = true
-    }
+  deployment_minimum_healthy_percent = 100
+  deployment_maximum_percent         = 200
+
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
   }
 
   # Enable ECS Exec for debugging
@@ -404,9 +402,9 @@ output "ecs_service_name" {
   value       = aws_ecs_service.prod.name
 }
 
-output "ecs_service_arn" {
-  description = "ECS service ARN"
-  value       = aws_ecs_service.prod.arn
+output "ecs_service_id" {
+  description = "ECS service ID"
+  value       = aws_ecs_service.prod.id
 }
 
 output "target_group_arn" {
