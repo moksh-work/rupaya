@@ -173,13 +173,12 @@ resource "aws_ecs_service" "staging" {
     container_port   = 3000
   }
 
-  deployment_configuration {
-    maximum_percent         = 200
-    minimum_healthy_percent = 100
-    deployment_circuit_breaker {
-      enable   = true
-      rollback = true
-    }
+  deployment_minimum_healthy_percent = 100
+  deployment_maximum_percent         = 200
+
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
   }
 
   service_registries {
@@ -349,9 +348,9 @@ output "ecs_service_name" {
   value       = aws_ecs_service.staging.name
 }
 
-output "ecs_service_arn" {
-  description = "ECS service ARN"
-  value       = aws_ecs_service.staging.arn
+output "ecs_service_id" {
+  description = "ECS service ID"
+  value       = aws_ecs_service.staging.id
 }
 
 output "target_group_arn" {
