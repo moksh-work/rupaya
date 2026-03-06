@@ -38,7 +38,7 @@ jobs:
     timeout-minutes: 25
     if: |
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && (github.event.workflow_run.head_branch == 'deployment' || github.event.workflow_run.head_branch == 'development'))
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && (github.event.workflow_run.head_branch == 'deployment' || github.event.workflow_run.head_branch == 'development' || github.event.workflow_run.head_branch == 'release'))
 
     env:
       AWS_REGION: us-east-1
@@ -66,6 +66,8 @@ jobs:
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             TARGET_ENV="${{ github.event.inputs.environment }}"
+          elif [[ "${{ github.event.workflow_run.head_branch }}" == "release" ]]; then
+            TARGET_ENV="staging"
           else
             TARGET_ENV="dev"
           fi

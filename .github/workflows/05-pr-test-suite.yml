@@ -8,8 +8,9 @@ name: 05 - PR Test Suite (Pre-Merge Validation)
 on:
   pull_request:
     branches: 
-      - develop
+      - development
       - deployment
+      - release
   workflow_dispatch:
 
 concurrency:
