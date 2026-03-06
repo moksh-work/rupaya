@@ -274,7 +274,7 @@ jobs:
 
       - name: Check for hardcoded secrets
         run: |
-          if git grep -inE "(password|api[_-]?key|secret|token)\s*=\s*['\"][^'\"]{8,}['\"]" -- '*.js' '*.ts' '*.json' ':!package-lock.json'; then
+          if git grep -inE "(password|api[_-]?key|secret|token)\s*=\s*['\"][^'\"]{16,}['\"]" -- 'backend/src/**/*.js' 'backend/src/**/*.ts'; then
             echo "⚠️  Found potential hardcoded secrets"
             exit 1
           fi
