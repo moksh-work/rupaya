@@ -190,6 +190,32 @@ jobs:
           echo "Health check failed at $HEALTH_URL"
           exit 1
 
+      - name: Endpoint smoke checks
+        run: |
+          HEALTH_OK=false
+
+          for endpoint in "/healthz" "/health"; do
+            URL="${API_BASE_URL}${endpoint}"
+            CODE=$(curl -k -s -o /dev/null -w "%{http_code}" "$URL" || true)
+            echo "Endpoint ${URL} -> HTTP ${CODE}"
+            if [[ "$CODE" == "200" ]]; then
+              HEALTH_OK=true
+              break
+            fi
+          done
+
+          if [[ "$HEALTH_OK" != "true" ]]; then
+            echo "No health endpoint returned HTTP 200"
+            exit 1
+          fi
+
+          READY_URL="${API_BASE_URL}/ready"
+          READY_CODE=$(curl -k -s -o /dev/null -w "%{http_code}" "$READY_URL" || true)
+          echo "Endpoint ${READY_URL} -> HTTP ${READY_CODE}"
+          if [[ "$READY_CODE" != "200" ]]; then
+            echo "Warning: readiness endpoint did not return 200 (non-blocking)"
+          fi
+
       - name: Run all E2E test cases
         working-directory: backend
         env:
@@ -204,6 +230,7 @@ jobs:
         run: |
           npm test -- \
             __tests__/e2e/remote-api.test.js \
+            __tests__/e2e/all-endpoints-smoke.test.js \
             __tests__/e2e/deployment-features.test.js \
             --maxWorkers=1 --json --outputFile=/tmp/e2e-results.json
 
