@@ -346,6 +346,8 @@ jobs:
           fi
 
       - name: Configure AWS credentials (OIDC)
+        id: aws-creds
+        continue-on-error: true
         if: steps.role.outputs.deploy_enabled == 'true'
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -353,12 +355,12 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
-        if: steps.role.outputs.deploy_enabled == 'true'
+        if: steps.role.outputs.deploy_enabled == 'true' && steps.aws-creds.outcome == 'success'
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build and push development image
-        if: steps.role.outputs.deploy_enabled == 'true'
+        if: steps.role.outputs.deploy_enabled == 'true' && steps.aws-creds.outcome == 'success'
         uses: docker/build-push-action@v5
         with:
           context: ./backend
@@ -368,7 +370,7 @@ jobs:
             ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:dev-${{ github.sha }}
 
       - name: Resolve ECS target
-        if: steps.role.outputs.deploy_enabled == 'true'
+        if: steps.role.outputs.deploy_enabled == 'true' && steps.aws-creds.outcome == 'success'
         id: ecs
         run: |
           CLUSTER="${{ vars.DEV_ECS_CLUSTER }}"
@@ -382,14 +384,14 @@ jobs:
           echo "task_definition=$TASK_DEF" >> "$GITHUB_OUTPUT"
 
       - name: Download current task definition
-        if: steps.role.outputs.deploy_enabled == 'true'
+        if: steps.role.outputs.deploy_enabled == 'true' && steps.aws-creds.outcome == 'success'
         run: |
           aws ecs describe-task-definition \
             --task-definition "${{ steps.ecs.outputs.task_definition }}" \
             --query taskDefinition > task-definition.json
 
       - name: Render task definition
-        if: steps.role.outputs.deploy_enabled == 'true'
+        if: steps.role.outputs.deploy_enabled == 'true' && steps.aws-creds.outcome == 'success'
         id: task-def
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
@@ -398,7 +400,7 @@ jobs:
           image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:dev-${{ github.sha }}
 
       - name: Deploy ECS service
-        if: steps.role.outputs.deploy_enabled == 'true'
+        if: steps.role.outputs.deploy_enabled == 'true' && steps.aws-creds.outcome == 'success'
         uses: aws-actions/amazon-ecs-deploy-task-definition@v1
         with:
           task-definition: ${{ steps.task-def.outputs.task-definition }}
@@ -406,9 +408,9 @@ jobs:
           service: ${{ steps.ecs.outputs.service }}
           wait-for-service-stability: true
 
-      - name: Mark deploy skipped when role missing
-        if: steps.role.outputs.deploy_enabled != 'true'
-        run: echo "Deploy stage skipped because AWS role is not configured for PR context"
+      - name: Mark deploy skipped when AWS auth unavailable
+        if: steps.role.outputs.deploy_enabled != 'true' || steps.aws-creds.outcome != 'success'
+        run: echo "Deploy stage skipped because AWS role is not configured/authorized for PR context"
 
   endpoint-tests-development:
     name: Development Endpoint Tests
