@@ -513,8 +513,19 @@ jobs:
           terraform validate
           TF_APPLY_ARGS=(
             -auto-approve
-            -var="container_image=${IMAGE_URI}"
           )
+
+          if [[ -f "variables.tf" ]] && grep -q 'variable "container_image"' variables.tf; then
+            TF_APPLY_ARGS+=(
+              -var="container_image=${IMAGE_URI}"
+            )
+          fi
+
+          if [[ -f "terraform.tfvars" ]]; then
+            TF_APPLY_ARGS+=(
+              -var-file="terraform.tfvars"
+            )
+          fi
 
           if [[ "$ENVIRONMENT" == "dev" ]]; then
             ACM_CERT_ARN="$(echo "${ACM_CERTIFICATE_ARN_DEV}" | tr -d '\r' | tr -d '\n' | xargs)"
@@ -552,7 +563,7 @@ jobs:
             fi
           fi
 
-          terraform apply "${TF_APPLY_ARGS[@]}"
+          terraform apply -input=false "${TF_APPLY_ARGS[@]}"
 
   deploy-summary:
     name: Deployment Summary
