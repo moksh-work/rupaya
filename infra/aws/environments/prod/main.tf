@@ -192,14 +192,10 @@ resource "aws_rds_cluster" "prod" {
   preferred_maintenance_window = "sun:03:00-sun:04:00"
   
   enabled_cloudwatch_logs_exports = ["postgresql"]
-  publicly_accessible             = false
   skip_final_snapshot             = false
   final_snapshot_identifier       = "rupaya-prod-final-snapshot-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
   
   enable_http_endpoint = true  # Enable Data API for serverless access
-  
-  # Enhanced monitoring
-  enable_cloudwatch_logs_exports = ["postgresql"]
   
   tags = {
     Name = "rupaya-prod"
@@ -260,7 +256,8 @@ resource "aws_elasticache_subnet_group" "prod" {
 }
 
 resource "aws_elasticache_replication_group" "prod" {
-  replication_group_description = "Production Redis cluster for Rupaya (cluster mode)"
+  replication_group_id          = "rupaya-prod"
+  description                   = "Production Redis cluster for Rupaya (cluster mode)"
   engine                        = "redis"
   engine_version                = var.redis_version
   node_type                     = var.redis_node_type
@@ -274,7 +271,6 @@ resource "aws_elasticache_replication_group" "prod" {
   multi_az_enabled              = true
   at_rest_encryption_enabled    = true
   transit_encryption_enabled    = true
-  auth_token_enabled            = true
   auth_token                    = var.redis_auth_token
   
   snapshot_retention_limit      = 30
