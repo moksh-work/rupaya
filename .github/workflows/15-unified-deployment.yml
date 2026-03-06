@@ -163,7 +163,11 @@ jobs:
           ROLE_ARN_INPUT="${{ github.event.inputs.role_arn_override }}"
           ROLE_ARN=""
           DEV_ACCOUNT_ID="${{ vars.AWS_ACCOUNT_ID_DEV }}"
+          STAGING_ACCOUNT_ID="${{ vars.AWS_ACCOUNT_ID_STAGING }}"
+          PROD_ACCOUNT_ID="${{ vars.AWS_ACCOUNT_ID_PROD }}"
           DEFAULT_DEV_ROLE_NAME="rupaya-github-oidc-dev"
+          DEFAULT_STAGING_ROLE_NAME="rupaya-github-oidc-staging"
+          DEFAULT_PROD_ROLE_NAME="rupaya-github-oidc-prod"
 
           if [[ -n "$ROLE_ARN_INPUT" ]]; then
             ROLE_ARN="$ROLE_ARN_INPUT"
@@ -202,8 +206,24 @@ jobs:
             ROLE_ARN="${BASH_REMATCH[1]}"
           fi
 
-          if [[ "$ENVIRONMENT" == "dev" && "$ROLE_ARN" != arn:aws:iam::*:role/* && -n "$DEV_ACCOUNT_ID" ]]; then
-            ROLE_ARN="arn:aws:iam::${DEV_ACCOUNT_ID}:role/${DEFAULT_DEV_ROLE_NAME}"
+          if [[ "$ROLE_ARN" != arn:aws:iam::*:role/* ]]; then
+            case "$ENVIRONMENT" in
+              dev)
+                if [[ -n "$DEV_ACCOUNT_ID" ]]; then
+                  ROLE_ARN="arn:aws:iam::${DEV_ACCOUNT_ID}:role/${DEFAULT_DEV_ROLE_NAME}"
+                fi
+                ;;
+              staging)
+                if [[ -n "$STAGING_ACCOUNT_ID" ]]; then
+                  ROLE_ARN="arn:aws:iam::${STAGING_ACCOUNT_ID}:role/${DEFAULT_STAGING_ROLE_NAME}"
+                fi
+                ;;
+              prod)
+                if [[ -n "$PROD_ACCOUNT_ID" ]]; then
+                  ROLE_ARN="arn:aws:iam::${PROD_ACCOUNT_ID}:role/${DEFAULT_PROD_ROLE_NAME}"
+                fi
+                ;;
+            esac
           fi
 
           if [[ "$ROLE_ARN" != arn:aws:iam::*:role/* ]]; then
@@ -217,6 +237,8 @@ jobs:
         env:
           ROLE_ARN: ${{ steps.role.outputs.role_arn }}
           EXPECTED_DEV_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID_DEV }}
+          EXPECTED_STAGING_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID_STAGING }}
+          EXPECTED_PROD_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID_PROD }}
         run: |
           ROLE_ACCOUNT_ID=$(echo "$ROLE_ARN" | sed -E 's#^arn:aws:iam::([0-9]{12}):role/.+#\1#')
           if [[ ! "$ROLE_ACCOUNT_ID" =~ ^[0-9]{12}$ ]]; then
@@ -226,9 +248,16 @@ jobs:
 
           echo "Resolved AWS account id from role ARN: $ROLE_ACCOUNT_ID"
 
-          if [[ "$ENVIRONMENT" == "dev" && -n "$EXPECTED_DEV_ACCOUNT_ID" && "$ROLE_ACCOUNT_ID" != "$EXPECTED_DEV_ACCOUNT_ID" ]]; then
-            echo "Role account id ($ROLE_ACCOUNT_ID) does not match AWS_ACCOUNT_ID_DEV ($EXPECTED_DEV_ACCOUNT_ID)"
-            echo "Update AWS_OIDC_ROLE_ARN_DEV / AWS_ACCOUNT_ID_DEV to the same account before deploying"
+          EXPECTED_ACCOUNT_ID=""
+          case "$ENVIRONMENT" in
+            dev) EXPECTED_ACCOUNT_ID="$EXPECTED_DEV_ACCOUNT_ID" ;;
+            staging) EXPECTED_ACCOUNT_ID="$EXPECTED_STAGING_ACCOUNT_ID" ;;
+            prod) EXPECTED_ACCOUNT_ID="$EXPECTED_PROD_ACCOUNT_ID" ;;
+          esac
+
+          if [[ -n "$EXPECTED_ACCOUNT_ID" && "$ROLE_ACCOUNT_ID" != "$EXPECTED_ACCOUNT_ID" ]]; then
+            echo "Role account id ($ROLE_ACCOUNT_ID) does not match AWS_ACCOUNT_ID_${ENVIRONMENT^^} ($EXPECTED_ACCOUNT_ID)"
+            echo "Update AWS_OIDC_ROLE_ARN_${ENVIRONMENT^^} / AWS_ACCOUNT_ID_${ENVIRONMENT^^} to the same account before deploying"
             exit 1
           fi
 
@@ -279,7 +308,11 @@ jobs:
           ROLE_ARN_INPUT="${{ github.event.inputs.role_arn_override }}"
           ROLE_ARN=""
           DEV_ACCOUNT_ID="${{ vars.AWS_ACCOUNT_ID_DEV }}"
+          STAGING_ACCOUNT_ID="${{ vars.AWS_ACCOUNT_ID_STAGING }}"
+          PROD_ACCOUNT_ID="${{ vars.AWS_ACCOUNT_ID_PROD }}"
           DEFAULT_DEV_ROLE_NAME="rupaya-github-oidc-dev"
+          DEFAULT_STAGING_ROLE_NAME="rupaya-github-oidc-staging"
+          DEFAULT_PROD_ROLE_NAME="rupaya-github-oidc-prod"
 
           if [[ -n "$ROLE_ARN_INPUT" ]]; then
             ROLE_ARN="$ROLE_ARN_INPUT"
@@ -318,8 +351,24 @@ jobs:
             ROLE_ARN="${BASH_REMATCH[1]}"
           fi
 
-          if [[ "$ENVIRONMENT" == "dev" && "$ROLE_ARN" != arn:aws:iam::*:role/* && -n "$DEV_ACCOUNT_ID" ]]; then
-            ROLE_ARN="arn:aws:iam::${DEV_ACCOUNT_ID}:role/${DEFAULT_DEV_ROLE_NAME}"
+          if [[ "$ROLE_ARN" != arn:aws:iam::*:role/* ]]; then
+            case "$ENVIRONMENT" in
+              dev)
+                if [[ -n "$DEV_ACCOUNT_ID" ]]; then
+                  ROLE_ARN="arn:aws:iam::${DEV_ACCOUNT_ID}:role/${DEFAULT_DEV_ROLE_NAME}"
+                fi
+                ;;
+              staging)
+                if [[ -n "$STAGING_ACCOUNT_ID" ]]; then
+                  ROLE_ARN="arn:aws:iam::${STAGING_ACCOUNT_ID}:role/${DEFAULT_STAGING_ROLE_NAME}"
+                fi
+                ;;
+              prod)
+                if [[ -n "$PROD_ACCOUNT_ID" ]]; then
+                  ROLE_ARN="arn:aws:iam::${PROD_ACCOUNT_ID}:role/${DEFAULT_PROD_ROLE_NAME}"
+                fi
+                ;;
+            esac
           fi
 
           if [[ "$ROLE_ARN" != arn:aws:iam::*:role/* ]]; then
@@ -333,6 +382,8 @@ jobs:
         env:
           ROLE_ARN: ${{ steps.role.outputs.role_arn }}
           EXPECTED_DEV_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID_DEV }}
+          EXPECTED_STAGING_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID_STAGING }}
+          EXPECTED_PROD_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID_PROD }}
         run: |
           ROLE_ACCOUNT_ID=$(echo "$ROLE_ARN" | sed -E 's#^arn:aws:iam::([0-9]{12}):role/.+#\1#')
           if [[ ! "$ROLE_ACCOUNT_ID" =~ ^[0-9]{12}$ ]]; then
@@ -342,9 +393,16 @@ jobs:
 
           echo "Resolved AWS account id from role ARN: $ROLE_ACCOUNT_ID"
 
-          if [[ "$ENVIRONMENT" == "dev" && -n "$EXPECTED_DEV_ACCOUNT_ID" && "$ROLE_ACCOUNT_ID" != "$EXPECTED_DEV_ACCOUNT_ID" ]]; then
-            echo "Role account id ($ROLE_ACCOUNT_ID) does not match AWS_ACCOUNT_ID_DEV ($EXPECTED_DEV_ACCOUNT_ID)"
-            echo "Update AWS_OIDC_ROLE_ARN_DEV / AWS_ACCOUNT_ID_DEV to the same account before deploying"
+          EXPECTED_ACCOUNT_ID=""
+          case "$ENVIRONMENT" in
+            dev) EXPECTED_ACCOUNT_ID="$EXPECTED_DEV_ACCOUNT_ID" ;;
+            staging) EXPECTED_ACCOUNT_ID="$EXPECTED_STAGING_ACCOUNT_ID" ;;
+            prod) EXPECTED_ACCOUNT_ID="$EXPECTED_PROD_ACCOUNT_ID" ;;
+          esac
+
+          if [[ -n "$EXPECTED_ACCOUNT_ID" && "$ROLE_ACCOUNT_ID" != "$EXPECTED_ACCOUNT_ID" ]]; then
+            echo "Role account id ($ROLE_ACCOUNT_ID) does not match AWS_ACCOUNT_ID_${ENVIRONMENT^^} ($EXPECTED_ACCOUNT_ID)"
+            echo "Update AWS_OIDC_ROLE_ARN_${ENVIRONMENT^^} / AWS_ACCOUNT_ID_${ENVIRONMENT^^} to the same account before deploying"
             exit 1
           fi
 
