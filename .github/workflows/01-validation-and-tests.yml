@@ -17,6 +17,8 @@ on:
   pull_request:
     branches:
       - main
+      - development
+      - release
     paths-ignore:
       - 'docs/**'
       - '**/*.md'
@@ -301,11 +303,11 @@ jobs:
           BRANCH_NAME="${{ github.head_ref || github.ref_name }}"
           
           # Valid branch patterns
-          if [[ $BRANCH_NAME =~ ^(main|develop|release/|feature/|bugfix/|hotfix/|chore/).*$ ]]; then
+          if [[ $BRANCH_NAME =~ ^(main|development|release|release/|feature/|bugfix/|hotfix/|chore/).*$ ]]; then
             echo "✅ Branch name '$BRANCH_NAME' follows naming convention"
           else
             echo "❌ Branch name '$BRANCH_NAME' does not follow convention"
-            echo "Valid patterns: main, develop, release/*, feature/*, bugfix/*, hotfix/*, chore/*"
+            echo "Valid patterns: main, development, release, release/*, feature/*, bugfix/*, hotfix/*, chore/*"
             exit 1
           fi
 

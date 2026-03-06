@@ -168,6 +168,26 @@ jobs:
           terraform_version: 1.6.6
           terraform_wrapper: false
 
+      - name: Pre-clean ECR images (dev)
+        if: ${{ steps.resolve.outputs.proceed == 'true' && github.event.inputs.environment == 'dev' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          REPO_NAME="rupaya-backend"
+
+          if aws ecr describe-repositories --repository-names "$REPO_NAME" --region "${{ steps.resolve.outputs.aws_region }}" >/dev/null 2>&1; then
+            IMAGE_IDS=$(aws ecr list-images --repository-name "$REPO_NAME" --region "${{ steps.resolve.outputs.aws_region }}" --query 'imageIds' --output json)
+            if [[ "$IMAGE_IDS" != "[]" ]]; then
+              aws ecr batch-delete-image --repository-name "$REPO_NAME" --region "${{ steps.resolve.outputs.aws_region }}" --image-ids "$IMAGE_IDS" >/dev/null
+              echo "Deleted existing images from $REPO_NAME before terraform destroy"
+            else
+              echo "No images found in $REPO_NAME"
+            fi
+          else
+            echo "ECR repository $REPO_NAME not found, skipping pre-clean"
+          fi
+
       - name: Terraform destroy
         if: ${{ steps.resolve.outputs.proceed == 'true' }}
         shell: bash

@@ -1,6 +1,10 @@
 name: 15 - Unified Multi-Environment Deployment
 
 on:
+  push:
+    branches:
+      - development
+      - release
   workflow_dispatch:
     inputs:
       environment:
@@ -30,7 +34,7 @@ jobs:
   determine-environment:
     name: Determine Environment
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref == 'refs/heads/development' || github.ref == 'refs/heads/release'))
     outputs:
       environment: ${{ steps.set.outputs.environment }}
       deploy: ${{ steps.set.outputs.deploy }}
@@ -47,6 +51,16 @@ jobs:
 
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             ENV="${{ github.event.inputs.environment }}"
+            DEPLOY="true"
+            BRANCH="${{ github.ref_name }}"
+            SHA="${{ github.sha }}"
+          elif [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/release" ]]; then
+            ENV="staging"
+            DEPLOY="true"
+            BRANCH="${{ github.ref_name }}"
+            SHA="${{ github.sha }}"
+          elif [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/development" ]]; then
+            ENV="dev"
             DEPLOY="true"
             BRANCH="${{ github.ref_name }}"
             SHA="${{ github.sha }}"

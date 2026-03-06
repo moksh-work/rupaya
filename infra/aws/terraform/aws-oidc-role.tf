@@ -185,8 +185,12 @@ data "aws_iam_policy_document" "ecr_policy" {
       "ecr:CompleteLayerUpload",
       "ecr:BatchGetImage",
       "ecr:GetDownloadUrlForLayer",
+      "ecr:ListImages",
+      "ecr:BatchDeleteImage",
       "ecr:GetLifecyclePolicy",
-      "ecr:PutLifecyclePolicy"
+      "ecr:PutLifecyclePolicy",
+      "ecr:DeleteLifecyclePolicy",
+      "ecr:DeleteRepository"
     ]
     resources = [
       "arn:aws:ecr:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:repository/rupaya*"
@@ -258,9 +262,12 @@ data "aws_iam_policy_document" "terraform_state_policy" {
     actions = [
       "s3:CreateBucket",
       "s3:ListBucket",
+      "s3:ListBucketVersions",
       "s3:GetObject",
       "s3:PutObject",
       "s3:DeleteObject",
+      "s3:DeleteObjectVersion",
+      "s3:DeleteBucket",
       "s3:PutBucketVersioning",
       "s3:PutBucketEncryption"
     ]
@@ -278,7 +285,8 @@ data "aws_iam_policy_document" "terraform_state_policy" {
       "dynamodb:DescribeTable",
       "dynamodb:GetItem",
       "dynamodb:PutItem",
-      "dynamodb:DeleteItem"
+      "dynamodb:DeleteItem",
+      "dynamodb:DeleteTable"
     ]
     resources = [
       "arn:aws:dynamodb:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:table/rupaya-terraform-lock*"
