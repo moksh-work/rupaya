@@ -313,6 +313,7 @@ jobs:
     needs: [backend-integration, contract-tests, android-integration, component-tests, security-validation, infra-tests-development]
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    if: github.event_name == 'workflow_dispatch'
     environment:
       name: development
 
@@ -417,6 +418,7 @@ jobs:
     needs: [deploy-development]
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    if: github.event_name == 'workflow_dispatch'
 
     steps:
       - name: Resolve development API URL
@@ -443,6 +445,7 @@ jobs:
     needs: [endpoint-tests-development]
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    if: github.event_name == 'workflow_dispatch'
 
     steps:
       - uses: actions/checkout@v4
